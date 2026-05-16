@@ -1,0 +1,9 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gray-scott-lab"
+version = "0.1.0"
+description = "Pure-Python Gray-Scott reaction-diffusion lab with generated SVG artifacts"
+requires-python = ">=3.11"
