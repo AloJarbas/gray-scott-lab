@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from statistics import mean, pstdev
 
-from .core import GrayScottParameters, GrayScottPreset, GrayScottState, flatten, simulate, simulate_preset
+from .core import GrayScottParameters, GrayScottPreset, GrayScottState, flatten, simulate, simulate_preset, simulate_preset_samples
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,19 @@ class ParameterScanRow:
     metrics: PatternMetrics
 
 
+@dataclass(frozen=True)
+class TimeSeriesPoint:
+    step: int
+    metrics: PatternMetrics
+
+
+@dataclass(frozen=True)
+class TimeEvolutionStudy:
+    preset: GrayScottPreset
+    snapshots: tuple[tuple[int, GrayScottState], ...]
+    timeline: tuple[TimeSeriesPoint, ...]
+
+
 CURATED_PRESETS: tuple[GrayScottPreset, ...] = (
     GrayScottPreset(name='sparse spots', feed=0.014, kill=0.054, steps=1800, size=72, patch_radius=7, seed=0),
     GrayScottPreset(name='worm bands', feed=0.022, kill=0.051, steps=1600, size=72, patch_radius=7, seed=0),
@@ -38,6 +51,9 @@ CURATED_PRESETS: tuple[GrayScottPreset, ...] = (
 
 SCAN_FEEDS: tuple[float, ...] = (0.014, 0.018, 0.022, 0.026, 0.030)
 SCAN_KILLS: tuple[float, ...] = (0.051, 0.054, 0.057, 0.060, 0.063)
+TIME_EVOLUTION_PRESET = CURATED_PRESETS[1]
+DEFAULT_SNAPSHOT_STEPS: tuple[int, ...] = (0, 60, 180, 360, 800, 1600)
+DEFAULT_TIMELINE_STEP = 40
 
 
 def measure_pattern(state: GrayScottState, *, active_threshold: float = 0.15) -> PatternMetrics:
@@ -95,3 +111,33 @@ def scan_parameter_grid(
             )
             rows.append(ParameterScanRow(feed=feed, kill=kill, metrics=measure_pattern(state)))
     return rows
+
+
+def preset_by_name(name: str) -> GrayScottPreset:
+    for preset in CURATED_PRESETS:
+        if preset.name == name:
+            return preset
+    raise KeyError(name)
+
+
+def study_time_evolution(
+    preset: GrayScottPreset = TIME_EVOLUTION_PRESET,
+    *,
+    snapshot_steps: tuple[int, ...] = DEFAULT_SNAPSHOT_STEPS,
+    timeline_every: int = DEFAULT_TIMELINE_STEP,
+) -> TimeEvolutionStudy:
+    if timeline_every <= 0:
+        raise ValueError('timeline_every must be positive')
+
+    usable_snapshot_steps = tuple(step for step in snapshot_steps if 0 <= step <= preset.steps)
+    timeline_steps = tuple(range(0, preset.steps + 1, timeline_every))
+    if timeline_steps[-1] != preset.steps:
+        timeline_steps = timeline_steps + (preset.steps,)
+
+    requested_steps = tuple(sorted(set(usable_snapshot_steps + timeline_steps)))
+    sampled = simulate_preset_samples(preset, requested_steps)
+    state_lookup = {step: state for step, state in sampled}
+
+    snapshots = tuple((step, state_lookup[step]) for step in usable_snapshot_steps)
+    timeline = tuple(TimeSeriesPoint(step=step, metrics=measure_pattern(state_lookup[step])) for step in timeline_steps)
+    return TimeEvolutionStudy(preset=preset, snapshots=snapshots, timeline=timeline)

@@ -20,14 +20,14 @@ This repo starts with a fixed seeded perturbation and then asks two day-one ques
 
 ## What is here
 
-- `gray_scott_lab/core.py`: deterministic seeding, explicit Euler updates, and simulation helpers
-- `gray_scott_lab/analysis.py`: curated presets plus pattern metrics for activity and interface sharpness
-- `gray_scott_lab/render.py`: SVG atlas and parameter-map renderers plus PNG export
-- `gray_scott_lab/cli.py`: one-shot summaries and figure rendering commands
-- `scripts/generate_gallery.py`: rebuild the public artifacts, CSV, and report in one pass
-- `reports/pattern-atlas-and-parameter-scan.md`: the first technical sidecar for reading the regimes
-- `notebooks/gray_scott_regimes.ipynb`: a slower companion notebook with equations, code, and interpretation
-- `tests/test_core.py`: small checks for determinism, bounds, and regime separation
+- `gray_scott_lab/core.py`: deterministic seeding, explicit Euler updates, simulation helpers, and sampled trajectory capture for time-evolution studies
+- `gray_scott_lab/analysis.py`: curated presets, pattern metrics for activity and interface sharpness, and a time-evolution study for the worm-band lane
+- `gray_scott_lab/render.py`: SVG atlas, parameter-map, and time-evolution renderers plus PNG export
+- `gray_scott_lab/cli.py`: one-shot summaries plus atlas, metric-map, and time-evolution rendering commands
+- `scripts/generate_gallery.py`: rebuild the public artifacts, CSV sidecars, reports, and notebooks in one pass
+- `reports/pattern-atlas-and-parameter-scan.md` and `reports/time-evolution-sidecar.md`: technical sidecars for reading the regimes as both final states and growth processes
+- `notebooks/gray_scott_regimes.ipynb` and `notebooks/gray_scott_time_evolution.ipynb`: slower companions with equations, code, and interpretation
+- `tests/test_core.py`: small checks for determinism, bounds, regime separation, and time-evolution sampling
 
 ## Generated artifacts
 
@@ -38,6 +38,10 @@ This repo starts with a fixed seeded perturbation and then asks two day-one ques
 ### Coarse parameter scan
 
 <img src="art/gray-scott-parameter-map.png" width="920" alt="Gray-Scott parameter scan heatmaps for active fraction and edge density" />
+
+### Time evolution sidecar
+
+<img src="art/gray-scott-time-evolution.png" width="980" alt="Gray-Scott time evolution card showing six snapshots and metric traces for the worm-band preset" />
 
 ## Run it
 
@@ -64,16 +68,23 @@ Render the coarse parameter scan alone:
 python3 -m gray_scott_lab.cli render-metric-map --output art/gray-scott-parameter-map.svg --png-output art/gray-scott-parameter-map.png
 ```
 
+Render the time-evolution sidecar for the curated worm-band preset:
+
+```bash
+python3 -m gray_scott_lab.cli render-timeline --output art/gray-scott-time-evolution.svg --png-output art/gray-scott-time-evolution.png
+```
+
 ## Why this repo is interesting
 
 Most introductions stop at pretty pictures. This one starts building a reusable measurement lane:
 
 - the atlas gives four reproducible regimes with fixed initialization and step counts
 - the parameter scan turns the chemistry knobs into an experiment instead of a list of screenshot captions
-- the CSV, report, notebook, and tests make it easier to deepen into a real regime study later
+- the new time-evolution sidecar shows one regime as a growth process instead of only a final frame
+- the CSV, reports, notebooks, and tests make it easier to deepen into a real regime study later
 
 ## Good next moves
 
-- add a time-series sidecar so one preset can be read as a growth process instead of only a final frame
 - compare the same parameter scan at two grid sizes or integration horizons to separate real structure from cutoff effects
 - add one bounded note on how much the seeded patch controls the outcome before claiming a broad phase diagram
+- extend the chemistry lane with one second reaction-diffusion model only if it reveals a genuinely different pattern family instead of duplicating the same feed/kill story

@@ -113,11 +113,49 @@ def simulate(
     return state
 
 
+def simulate_samples(
+    params: GrayScottParameters,
+    sample_steps: tuple[int, ...],
+    *,
+    size: int = 72,
+    patch_radius: int = 7,
+    seed: int = 0,
+) -> list[tuple[int, GrayScottState]]:
+    if any(step_count < 0 for step_count in sample_steps):
+        raise ValueError('sample steps must be non-negative')
+    ordered_steps = tuple(sorted(set(sample_steps)))
+    state = seed_state(size=size, patch_radius=patch_radius, seed=seed)
+    if not ordered_steps:
+        return []
+
+    captured: list[tuple[int, GrayScottState]] = []
+    targets = set(ordered_steps)
+    if 0 in targets:
+        captured.append((0, GrayScottState(u=[row[:] for row in state.u], v=[row[:] for row in state.v])))
+
+    max_step = ordered_steps[-1]
+    for step_count in range(1, max_step + 1):
+        state = step(state, params)
+        if step_count in targets:
+            captured.append((step_count, GrayScottState(u=[row[:] for row in state.u], v=[row[:] for row in state.v])))
+    return captured
+
+
 def simulate_preset(preset: GrayScottPreset) -> GrayScottState:
     return simulate(
         GrayScottParameters(feed=preset.feed, kill=preset.kill),
         size=preset.size,
         steps=preset.steps,
+        patch_radius=preset.patch_radius,
+        seed=preset.seed,
+    )
+
+
+def simulate_preset_samples(preset: GrayScottPreset, sample_steps: tuple[int, ...]) -> list[tuple[int, GrayScottState]]:
+    return simulate_samples(
+        GrayScottParameters(feed=preset.feed, kill=preset.kill),
+        sample_steps,
+        size=preset.size,
         patch_radius=preset.patch_radius,
         seed=preset.seed,
     )

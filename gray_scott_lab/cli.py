@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-from .analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, measure_pattern, scan_parameter_grid, study_presets
+from .analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, measure_pattern, preset_by_name, scan_parameter_grid, study_presets, study_time_evolution
 from .core import GrayScottParameters, simulate
-from .render import export_png_from_svg, render_metric_map, render_pattern_atlas
+from .render import export_png_from_svg, render_metric_map, render_pattern_atlas, render_time_evolution
 
 
 def parse_series(value: str) -> tuple[float, ...]:
@@ -39,6 +39,11 @@ def main() -> None:
     map_parser.add_argument('--output', type=Path, required=True)
     map_parser.add_argument('--png-output', type=Path, default=None)
 
+    timeline_parser = subparsers.add_parser('render-timeline', help='render the time-evolution sidecar for one curated preset')
+    timeline_parser.add_argument('--preset', choices=[preset.name for preset in CURATED_PRESETS], default='worm bands')
+    timeline_parser.add_argument('--output', type=Path, required=True)
+    timeline_parser.add_argument('--png-output', type=Path, default=None)
+
     args = parser.parse_args()
 
     if args.command == 'summarize':
@@ -69,6 +74,14 @@ def main() -> None:
         args.output.write_text(content)
         if args.png_output is not None:
             export_png_from_svg(args.output, args.png_output, size=2000, dpi=300)
+        return
+
+    if args.command == 'render-timeline':
+        content = render_time_evolution(study_time_evolution(preset_by_name(args.preset)))
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(content)
+        if args.png_output is not None:
+            export_png_from_svg(args.output, args.png_output, size=2200, dpi=300)
         return
 
     rows = scan_parameter_grid(

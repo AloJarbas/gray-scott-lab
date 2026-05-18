@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import tempfile
 
-from .analysis import ParameterScanRow, PresetStudy
+from .analysis import ParameterScanRow, PresetStudy, TimeEvolutionStudy
 
 
 def svg_text(x: float, y: float, text: str, klass: str, anchor: str = 'start') -> str:
@@ -183,6 +183,93 @@ def render_metric_map(rows: list[ParameterScanRow], feeds: tuple[float, ...], ki
         'Read the pair of maps together:',
         'active fraction tracks how much of the field stays chemically busy, while edge density tracks how sharp the interfaces remain.',
         'The middle band is where the patterns stop being isolated islands but have not yet blurred into a mostly filled field.',
+    ], 'small', line_height=22.0))
+    parts.append('</svg>')
+    return '\n'.join(parts) + '\n'
+
+
+def render_time_evolution(study: TimeEvolutionStudy) -> str:
+    width, height = 1340, 1240
+    parts = base_svg(
+        width,
+        height,
+        'Gray-Scott time evolution',
+        f'{study.preset.name} grows from one seeded patch into a full regime. The snapshots show shape; the curves show what the chemistry is doing over time.',
+    )
+
+    snapshot_positions = [
+        (50, 132), (470, 132), (890, 132),
+        (50, 466), (470, 466), (890, 466),
+    ]
+    panel_w = 400
+    panel_h = 300
+    pixel = 3.2
+
+    for (step_count, state), (left, top) in zip(study.snapshots, snapshot_positions):
+        parts.append(f'<rect x="{left}" y="{top}" width="{panel_w}" height="{panel_h}" class="panel"/>')
+        parts.append(svg_text(left + 18, top + 28, f'step {step_count}', 'label'))
+        metrics = next((point.metrics for point in study.timeline if point.step == step_count), None)
+        if metrics is None:
+            from .analysis import measure_pattern
+            metrics = measure_pattern(state)
+        parts.append(svg_text(left + 18, top + 50, f'active={metrics.active_fraction:.1%}, edge={metrics.edge_density:.4f}', 'small'))
+        grid_left = left + 18
+        grid_top = top + 68
+        for row_index, row in enumerate(state.v):
+            for col_index, value in enumerate(row):
+                parts.append(
+                    f'<rect x="{grid_left + col_index * pixel:.1f}" y="{grid_top + row_index * pixel:.1f}" width="{pixel + 0.15:.1f}" height="{pixel + 0.15:.1f}" fill="{pattern_color(value)}"/>'
+                )
+
+    def plot_metric_panel(left: float, top: float, title: str, subtitle: str, values: list[float], color: str, y_label: str) -> None:
+        panel_w = 590
+        panel_h = 250
+        plot_left = left + 54
+        plot_top = top + 74
+        plot_right = left + panel_w - 34
+        plot_bottom = top + panel_h - 42
+        y_min = 0.0
+        y_max = max(values) * 1.12 if max(values) > 0 else 1.0
+        max_step = max(point.step for point in study.timeline)
+
+        parts.append(f'<rect x="{left}" y="{top}" width="{panel_w}" height="{panel_h}" class="panel"/>')
+        parts.append(svg_text(left + 18, top + 28, title, 'label'))
+        parts.append(svg_text(left + 18, top + 50, subtitle, 'small'))
+
+        for fraction in (0.0, 0.25, 0.5, 0.75, 1.0):
+            x = plot_left + (plot_right - plot_left) * fraction
+            parts.append(f'<line x1="{x:.1f}" y1="{plot_top:.1f}" x2="{x:.1f}" y2="{plot_bottom:.1f}" class="axis" opacity="0.35"/>')
+            parts.append(svg_text(x, plot_bottom + 22, f'{round(max_step * fraction):d}', 'small', 'middle'))
+        for fraction in (0.0, 0.33, 0.66, 1.0):
+            y_value = y_min + (y_max - y_min) * fraction
+            y = plot_bottom - (plot_bottom - plot_top) * fraction
+            parts.append(f'<line x1="{plot_left:.1f}" y1="{y:.1f}" x2="{plot_right:.1f}" y2="{y:.1f}" class="axis" opacity="0.35"/>')
+            parts.append(svg_text(plot_left - 12, y + 5, f'{y_value:.3f}', 'small', 'end'))
+
+        parts.append(f'<line x1="{plot_left:.1f}" y1="{plot_bottom:.1f}" x2="{plot_right:.1f}" y2="{plot_bottom:.1f}" class="axis"/>')
+        parts.append(f'<line x1="{plot_left:.1f}" y1="{plot_top:.1f}" x2="{plot_left:.1f}" y2="{plot_bottom:.1f}" class="axis"/>')
+        parts.append(svg_text((plot_left + plot_right) / 2, plot_bottom + 44, 'simulation step', 'small', 'middle'))
+        parts.append(svg_text(plot_left, plot_top - 10, y_label, 'small'))
+
+        polyline_points = []
+        for point, value in zip(study.timeline, values):
+            x = plot_left + (plot_right - plot_left) * point.step / max_step
+            y = plot_bottom if y_max == y_min else plot_bottom - (plot_bottom - plot_top) * (value - y_min) / (y_max - y_min)
+            polyline_points.append(f'{x:.2f},{y:.2f}')
+            parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="3.1" fill="{color}"/>')
+        parts.append(f'<polyline points="{" ".join(polyline_points)}" fill="none" stroke="{color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>')
+
+    active_values = [point.metrics.active_fraction for point in study.timeline]
+    edge_values = [point.metrics.edge_density for point in study.timeline]
+    plot_metric_panel(70, 830, 'active fraction over time', 'How much of the field stays chemically busy as the pattern grows.', active_values, '#38bdf8', 'active')
+    plot_metric_panel(680, 830, 'edge density over time', 'How sharp the interfaces stay while the regime fills in.', edge_values, '#f97316', 'edge')
+
+    peak_active = max(study.timeline, key=lambda point: point.metrics.active_fraction)
+    peak_edge = max(study.timeline, key=lambda point: point.metrics.edge_density)
+    parts.append(svg_paragraph(70, 1122, [
+        f'Peak activity lands around step {peak_active.step} at {peak_active.metrics.active_fraction:.1%}.',
+        f'Peak edge density lands around step {peak_edge.step} at {peak_edge.metrics.edge_density:.4f}.',
+        'That is the useful split: filling in and sharpening are related, but they are not the same process.',
     ], 'small', line_height=22.0))
     parts.append('</svg>')
     return '\n'.join(parts) + '\n'
