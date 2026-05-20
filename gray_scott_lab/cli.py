@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-from .analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, measure_pattern, preset_by_name, scan_parameter_grid, study_presets, study_time_evolution
+from .analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, measure_pattern, preset_by_name, scan_parameter_grid, study_horizon_comparison, study_presets, study_time_evolution
 from .core import GrayScottParameters, simulate
-from .render import export_png_from_svg, render_metric_map, render_pattern_atlas, render_time_evolution
+from .render import export_png_from_svg, render_horizon_comparison, render_metric_map, render_pattern_atlas, render_time_evolution
 
 
 def parse_series(value: str) -> tuple[float, ...]:
@@ -44,6 +44,17 @@ def main() -> None:
     timeline_parser.add_argument('--output', type=Path, required=True)
     timeline_parser.add_argument('--png-output', type=Path, default=None)
 
+    horizon_parser = subparsers.add_parser('render-horizon-comparison', help='render a short-vs-long horizon comparison for the feed/kill scan')
+    horizon_parser.add_argument('--feeds', type=parse_series, default=SCAN_FEEDS)
+    horizon_parser.add_argument('--kills', type=parse_series, default=SCAN_KILLS)
+    horizon_parser.add_argument('--short-steps', type=int, default=700)
+    horizon_parser.add_argument('--long-steps', type=int, default=1400)
+    horizon_parser.add_argument('--size', type=int, default=40)
+    horizon_parser.add_argument('--patch-radius', type=int, default=5)
+    horizon_parser.add_argument('--seed', type=int, default=0)
+    horizon_parser.add_argument('--output', type=Path, required=True)
+    horizon_parser.add_argument('--png-output', type=Path, default=None)
+
     args = parser.parse_args()
 
     if args.command == 'summarize':
@@ -78,6 +89,23 @@ def main() -> None:
 
     if args.command == 'render-timeline':
         content = render_time_evolution(study_time_evolution(preset_by_name(args.preset)))
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(content)
+        if args.png_output is not None:
+            export_png_from_svg(args.output, args.png_output, size=2200, dpi=300)
+        return
+
+    if args.command == 'render-horizon-comparison':
+        study = study_horizon_comparison(
+            feeds=args.feeds,
+            kills=args.kills,
+            short_steps=args.short_steps,
+            long_steps=args.long_steps,
+            size=args.size,
+            patch_radius=args.patch_radius,
+            seed=args.seed,
+        )
+        content = render_horizon_comparison(study, args.feeds, args.kills)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(content)
         if args.png_output is not None:

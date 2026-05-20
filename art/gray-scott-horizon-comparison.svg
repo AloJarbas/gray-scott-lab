@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="1540" viewBox="0 0 1220 1540" role="img" aria-labelledby="title desc">
+<title>Gray-Scott horizon comparison</title>
+<desc>The same feed-vs-kill grid at 700 and 1400 steps. This is the cutoff check: which cells were already real, and which ones were still moving?</desc>
+<style>
+svg { background: #07111f; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.title { fill: #e2e8f0; font-size: 30px; font-weight: 700; }
+.subtitle { fill: #94a3b8; font-size: 16px; }
+.label { fill: #cbd5e1; font-size: 18px; font-weight: 600; }
+.small { fill: #94a3b8; font-size: 14px; }
+.metric { fill: #f8fafc; font-size: 14px; }
+.axis { stroke: #475569; stroke-width: 1.5; }
+.panel { fill: #0f172a; stroke: #334155; stroke-width: 2; rx: 18; }
+.cell-label { fill: #e2e8f0; font-size: 13px; font-weight: 600; }
+</style>
+<text x="56.0" y="54.0" class="title" text-anchor="start">Gray-Scott horizon comparison</text>
+<text x="56.0" y="82.0" class="subtitle" text-anchor="start">The same feed-vs-kill grid at 700 and 1400 steps. This is the cutoff check: which cells were already real, and which ones were still moving?</text>
+<rect x="72" y="156" width="546" height="560" class="panel"/>
+<text x="96.0" y="190.0" class="label" text-anchor="start">active fraction at 700 steps</text>
+<text x="96.0" y="214.0" class="small"><tspan x="96.0" dy="0">The early map: what still looks chemically busy before the longer run settles.</tspan></text>
+<text x="137.0" y="254.0" class="small" text-anchor="middle">0.014</text>
+<text x="219.0" y="254.0" class="small" text-anchor="middle">0.018</text>
+<text x="301.0" y="254.0" class="small" text-anchor="middle">0.022</text>
+<text x="383.0" y="254.0" class="small" text-anchor="middle">0.026</text>
+<text x="465.0" y="254.0" class="small" text-anchor="middle">0.030</text>
+<text x="301.0" y="228.0" class="small" text-anchor="middle">feed rate F</text>
+<text x="78.0" y="319.0" class="small" text-anchor="end">0.051</text>
+<rect x="96.0" y="272.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="134.0" y="311.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="178.0" y="272.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="216.0" y="311.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="260.0" y="272.0" width="76" height="76" fill="#16306b" rx="10"/>
+<text x="298.0" y="311.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.134</text>
+<rect x="342.0" y="272.0" width="76" height="76" fill="#facc15" rx="10"/>
+<text x="380.0" y="311.0" class="cell-label" text-anchor="middle" fill="#0f172a">1.000</text>
+<rect x="424.0" y="272.0" width="76" height="76" fill="#facc15" rx="10"/>
+<text x="462.0" y="311.0" class="cell-label" text-anchor="middle" fill="#0f172a">1.000</text>
+<text x="78.0" y="401.0" class="small" text-anchor="end">0.054</text>
+<rect x="96.0" y="354.0" width="76" height="76" fill="#111c38" rx="10"/>
+<text x="134.0" y="393.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.029</text>
+<rect x="178.0" y="354.0" width="76" height="76" fill="#1f4fb7" rx="10"/>
+<text x="216.0" y="393.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.293</text>
+<rect x="260.0" y="354.0" width="76" height="76" fill="#2563eb" rx="10"/>
+<text x="298.0" y="393.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.401</text>
+<rect x="342.0" y="354.0" width="76" height="76" fill="#15a698" rx="10"/>
+<text x="380.0" y="393.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.634</text>
+<rect x="424.0" y="354.0" width="76" height="76" fill="#f8cc16" rx="10"/>
+<text x="462.0" y="393.0" class="cell-label" text-anchor="middle" fill="#0f172a">0.998</text>
+<text x="78.0" y="483.0" class="small" text-anchor="end">0.057</text>
+<rect x="96.0" y="436.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="134.0" y="475.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="178.0" y="436.0" width="76" height="76" fill="#183475" rx="10"/>
+<text x="216.0" y="475.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.155</text>
+<rect x="260.0" y="436.0" width="76" height="76" fill="#1e4aac" rx="10"/>
+<text x="298.0" y="475.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.269</text>
+<rect x="342.0" y="436.0" width="76" height="76" fill="#2270db" rx="10"/>
+<text x="380.0" y="475.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.446</text>
+<rect x="424.0" y="436.0" width="76" height="76" fill="#1b8db7" rx="10"/>
+<text x="462.0" y="475.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.546</text>
+<text x="78.0" y="565.0" class="small" text-anchor="end">0.060</text>
+<rect x="96.0" y="518.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="134.0" y="557.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="178.0" y="518.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="216.0" y="557.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="260.0" y="518.0" width="76" height="76" fill="#1a3e8c" rx="10"/>
+<text x="298.0" y="557.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.204</text>
+<rect x="342.0" y="518.0" width="76" height="76" fill="#1d47a4" rx="10"/>
+<text x="380.0" y="557.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.253</text>
+<rect x="424.0" y="518.0" width="76" height="76" fill="#2460e3" rx="10"/>
+<text x="462.0" y="557.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.384</text>
+<text x="78.0" y="647.0" class="small" text-anchor="end">0.063</text>
+<rect x="96.0" y="600.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="134.0" y="639.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="178.0" y="600.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="216.0" y="639.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="260.0" y="600.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="298.0" y="639.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="342.0" y="600.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="380.0" y="639.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="424.0" y="600.0" width="76" height="76" fill="#173371" rx="10"/>
+<text x="462.0" y="639.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.146</text>
+<rect x="648" y="156" width="546" height="560" class="panel"/>
+<text x="672.0" y="190.0" class="label" text-anchor="start">active fraction change (1400 - 700)</text>
+<text x="672.0" y="214.0" class="small"><tspan x="672.0" dy="0">Positive = more occupied later. Negative = early overread.</tspan></text>
+<text x="713.0" y="254.0" class="small" text-anchor="middle">0.014</text>
+<text x="795.0" y="254.0" class="small" text-anchor="middle">0.018</text>
+<text x="877.0" y="254.0" class="small" text-anchor="middle">0.022</text>
+<text x="959.0" y="254.0" class="small" text-anchor="middle">0.026</text>
+<text x="1041.0" y="254.0" class="small" text-anchor="middle">0.030</text>
+<text x="877.0" y="228.0" class="small" text-anchor="middle">feed rate F</text>
+<text x="654.0" y="319.0" class="small" text-anchor="end">0.051</text>
+<rect x="672.0" y="272.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="710.0" y="311.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="754.0" y="272.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="792.0" y="311.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="836.0" y="272.0" width="76" height="76" fill="#594220" rx="10"/>
+<text x="874.0" y="311.0" class="cell-label" text-anchor="middle" fill="#f8fafc">+0.321</text>
+<rect x="918.0" y="272.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="956.0" y="311.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="1000.0" y="272.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="1038.0" y="311.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<text x="654.0" y="401.0" class="small" text-anchor="end">0.054</text>
+<rect x="672.0" y="354.0" width="76" height="76" fill="#0f182e" rx="10"/>
+<text x="710.0" y="393.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.029</text>
+<rect x="754.0" y="354.0" width="76" height="76" fill="#1e2028" rx="10"/>
+<text x="792.0" y="393.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.065</text>
+<rect x="836.0" y="354.0" width="76" height="76" fill="#101b35" rx="10"/>
+<text x="874.0" y="393.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.086</text>
+<rect x="918.0" y="354.0" width="76" height="76" fill="#101930" rx="10"/>
+<text x="956.0" y="393.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.042</text>
+<rect x="1000.0" y="354.0" width="76" height="76" fill="#1e40af" rx="10"/>
+<text x="1038.0" y="393.0" class="cell-label" text-anchor="middle" fill="#f8fafc">-0.998</text>
+<text x="654.0" y="483.0" class="small" text-anchor="end">0.057</text>
+<rect x="672.0" y="436.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="710.0" y="475.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="754.0" y="436.0" width="76" height="76" fill="#111d3f" rx="10"/>
+<text x="792.0" y="475.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.155</text>
+<rect x="836.0" y="436.0" width="76" height="76" fill="#202128" rx="10"/>
+<text x="874.0" y="475.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.075</text>
+<rect x="918.0" y="436.0" width="76" height="76" fill="#101a35" rx="10"/>
+<text x="956.0" y="475.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.085</text>
+<rect x="1000.0" y="436.0" width="76" height="76" fill="#1a1d29" rx="10"/>
+<text x="1038.0" y="475.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.046</text>
+<text x="654.0" y="565.0" class="small" text-anchor="end">0.060</text>
+<rect x="672.0" y="518.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="710.0" y="557.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="754.0" y="518.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="792.0" y="557.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="836.0" y="518.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="874.0" y="557.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.001</text>
+<rect x="918.0" y="518.0" width="76" height="76" fill="#0f182d" rx="10"/>
+<text x="956.0" y="557.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.023</text>
+<rect x="1000.0" y="518.0" width="76" height="76" fill="#0f182c" rx="10"/>
+<text x="1038.0" y="557.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.016</text>
+<text x="654.0" y="647.0" class="small" text-anchor="end">0.063</text>
+<rect x="672.0" y="600.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="710.0" y="639.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="754.0" y="600.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="792.0" y="639.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="836.0" y="600.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="874.0" y="639.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="918.0" y="600.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="956.0" y="639.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.000</text>
+<rect x="1000.0" y="600.0" width="76" height="76" fill="#1e2028" rx="10"/>
+<text x="1038.0" y="639.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.064</text>
+<rect x="72" y="748" width="546" height="560" class="panel"/>
+<text x="96.0" y="782.0" class="label" text-anchor="start">active fraction at 1400 steps</text>
+<text x="96.0" y="806.0" class="small"><tspan x="96.0" dy="0">The later map: the same grid after the longer chemical horizon.</tspan></text>
+<text x="137.0" y="846.0" class="small" text-anchor="middle">0.014</text>
+<text x="219.0" y="846.0" class="small" text-anchor="middle">0.018</text>
+<text x="301.0" y="846.0" class="small" text-anchor="middle">0.022</text>
+<text x="383.0" y="846.0" class="small" text-anchor="middle">0.026</text>
+<text x="465.0" y="846.0" class="small" text-anchor="middle">0.030</text>
+<text x="301.0" y="820.0" class="small" text-anchor="middle">feed rate F</text>
+<text x="78.0" y="911.0" class="small" text-anchor="end">0.051</text>
+<rect x="96.0" y="864.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="134.0" y="903.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="178.0" y="864.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="216.0" y="903.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="260.0" y="864.0" width="76" height="76" fill="#2173d8" rx="10"/>
+<text x="298.0" y="903.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.455</text>
+<rect x="342.0" y="864.0" width="76" height="76" fill="#facc15" rx="10"/>
+<text x="380.0" y="903.0" class="cell-label" text-anchor="middle" fill="#0f172a">1.000</text>
+<rect x="424.0" y="864.0" width="76" height="76" fill="#facc15" rx="10"/>
+<text x="462.0" y="903.0" class="cell-label" text-anchor="middle" fill="#0f172a">1.000</text>
+<text x="78.0" y="993.0" class="small" text-anchor="end">0.054</text>
+<rect x="96.0" y="946.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="134.0" y="985.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="178.0" y="946.0" width="76" height="76" fill="#235bd7" rx="10"/>
+<text x="216.0" y="985.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.358</text>
+<rect x="260.0" y="946.0" width="76" height="76" fill="#2053c2" rx="10"/>
+<text x="298.0" y="985.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.316</text>
+<rect x="342.0" y="946.0" width="76" height="76" fill="#189aa7" rx="10"/>
+<text x="380.0" y="985.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.593</text>
+<rect x="424.0" y="946.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="462.0" y="985.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<text x="78.0" y="1075.0" class="small" text-anchor="end">0.057</text>
+<rect x="96.0" y="1028.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="134.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="178.0" y="1028.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="216.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="260.0" y="1028.0" width="76" height="76" fill="#2258d0" rx="10"/>
+<text x="298.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.344</text>
+<rect x="342.0" y="1028.0" width="76" height="76" fill="#235cd8" rx="10"/>
+<text x="380.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.361</text>
+<rect x="424.0" y="1028.0" width="76" height="76" fill="#189aa7" rx="10"/>
+<text x="462.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.593</text>
+<text x="78.0" y="1157.0" class="small" text-anchor="end">0.060</text>
+<rect x="96.0" y="1110.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="134.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="178.0" y="1110.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="216.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="260.0" y="1110.0" width="76" height="76" fill="#1a3e8c" rx="10"/>
+<text x="298.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.203</text>
+<rect x="342.0" y="1110.0" width="76" height="76" fill="#1c4399" rx="10"/>
+<text x="380.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.229</text>
+<rect x="424.0" y="1110.0" width="76" height="76" fill="#235ddc" rx="10"/>
+<text x="462.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.368</text>
+<text x="78.0" y="1239.0" class="small" text-anchor="end">0.063</text>
+<rect x="96.0" y="1192.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="134.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="178.0" y="1192.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="216.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="260.0" y="1192.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="298.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="342.0" y="1192.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="380.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.000</text>
+<rect x="424.0" y="1192.0" width="76" height="76" fill="#1b3f8f" rx="10"/>
+<text x="462.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#e2e8f0">0.210</text>
+<rect x="648" y="748" width="546" height="560" class="panel"/>
+<text x="672.0" y="782.0" class="label" text-anchor="start">edge-density change (1400 - 700)</text>
+<text x="672.0" y="806.0" class="small"><tspan x="672.0" dy="0">Positive = sharper later fronts. Negative = smoothing or collapse.</tspan></text>
+<text x="713.0" y="846.0" class="small" text-anchor="middle">0.014</text>
+<text x="795.0" y="846.0" class="small" text-anchor="middle">0.018</text>
+<text x="877.0" y="846.0" class="small" text-anchor="middle">0.022</text>
+<text x="959.0" y="846.0" class="small" text-anchor="middle">0.026</text>
+<text x="1041.0" y="846.0" class="small" text-anchor="middle">0.030</text>
+<text x="877.0" y="820.0" class="small" text-anchor="middle">feed rate F</text>
+<text x="654.0" y="911.0" class="small" text-anchor="end">0.051</text>
+<rect x="672.0" y="864.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="710.0" y="903.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="754.0" y="864.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="792.0" y="903.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="836.0" y="864.0" width="76" height="76" fill="#e1920e" rx="10"/>
+<text x="874.0" y="903.0" class="cell-label" text-anchor="middle" fill="#f8fafc">+0.017</text>
+<rect x="918.0" y="864.0" width="76" height="76" fill="#0f172b" rx="10"/>
+<text x="956.0" y="903.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="1000.0" y="864.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="1038.0" y="903.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<text x="654.0" y="993.0" class="small" text-anchor="end">0.054</text>
+<rect x="672.0" y="946.0" width="76" height="76" fill="#172c6f" rx="10"/>
+<text x="710.0" y="985.0" class="cell-label" text-anchor="middle" fill="#f8fafc">-0.010</text>
+<rect x="754.0" y="946.0" width="76" height="76" fill="#302a26" rx="10"/>
+<text x="792.0" y="985.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.003</text>
+<rect x="836.0" y="946.0" width="76" height="76" fill="#122048" rx="10"/>
+<text x="874.0" y="985.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.004</text>
+<rect x="918.0" y="946.0" width="76" height="76" fill="#5c4420" rx="10"/>
+<text x="956.0" y="985.0" class="cell-label" text-anchor="middle" fill="#f8fafc">+0.006</text>
+<rect x="1000.0" y="946.0" width="76" height="76" fill="#101932" rx="10"/>
+<text x="1038.0" y="985.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.001</text>
+<text x="654.0" y="1075.0" class="small" text-anchor="end">0.057</text>
+<rect x="672.0" y="1028.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="710.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="754.0" y="1028.0" width="76" height="76" fill="#1e40af" rx="10"/>
+<text x="792.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#f8fafc">-0.019</text>
+<rect x="836.0" y="1028.0" width="76" height="76" fill="#392f24" rx="10"/>
+<text x="874.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.003</text>
+<rect x="918.0" y="1028.0" width="76" height="76" fill="#0f172b" rx="10"/>
+<text x="956.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="1000.0" y="1028.0" width="76" height="76" fill="#101a33" rx="10"/>
+<text x="1038.0" y="1067.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.001</text>
+<text x="654.0" y="1157.0" class="small" text-anchor="end">0.060</text>
+<rect x="672.0" y="1110.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="710.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="754.0" y="1110.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="792.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="836.0" y="1110.0" width="76" height="76" fill="#2d2826" rx="10"/>
+<text x="874.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.002</text>
+<rect x="918.0" y="1110.0" width="76" height="76" fill="#161b29" rx="10"/>
+<text x="956.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.001</text>
+<rect x="1000.0" y="1110.0" width="76" height="76" fill="#3f3324" rx="10"/>
+<text x="1038.0" y="1149.0" class="cell-label" text-anchor="middle" fill="#0f172a">+0.004</text>
+<text x="654.0" y="1239.0" class="small" text-anchor="end">0.063</text>
+<rect x="672.0" y="1192.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="710.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="754.0" y="1192.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="792.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="836.0" y="1192.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="874.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="918.0" y="1192.0" width="76" height="76" fill="#0f172a" rx="10"/>
+<text x="956.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#0f172a">-0.000</text>
+<rect x="1000.0" y="1192.0" width="76" height="76" fill="#664a1e" rx="10"/>
+<text x="1038.0" y="1231.0" class="cell-label" text-anchor="middle" fill="#f8fafc">+0.007</text>
+<text x="72.0" y="1350.0" class="small"><tspan x="72.0" dy="0">Biggest active growth: F=0.022, k=0.051, Δactive=+0.321.</tspan><tspan x="72.0" dy="22.0">Biggest fade: F=0.030, k=0.054, Δactive=-0.998.</tspan><tspan x="72.0" dy="22.0">Sharpest late front growth: F=0.022, k=0.051, Δedge=+0.0170.</tspan><tspan x="72.0" dy="22.0">Strongest smoothing: F=0.018, k=0.057, Δedge=-0.0186.</tspan></text>
+<text x="72.0" y="1452.0" class="small"><tspan x="72.0" dy="0">This is the practical read: the coarse map was useful, but not every bright cell had finished becoming itself.</tspan><tspan x="72.0" dy="22.0">Some settings keep growing into clearer bands, while others looked active early and then cooled almost all the way out.</tspan></text>
+</svg>

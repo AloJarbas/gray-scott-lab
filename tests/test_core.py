@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from gray_scott_lab.analysis import TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, study_time_evolution
+from gray_scott_lab.analysis import TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, study_horizon_comparison, study_time_evolution
 from gray_scott_lab.core import GrayScottParameters, seed_state, simulate, simulate_samples
 
 
@@ -40,6 +40,17 @@ class GrayScottTests(unittest.TestCase):
         last = study.timeline[-1].metrics
         self.assertGreater(last.active_fraction, first.active_fraction)
         self.assertNotAlmostEqual(last.edge_density, first.edge_density, places=4)
+
+    def test_horizon_comparison_detects_growth_and_fade_cells(self) -> None:
+        study = study_horizon_comparison((0.018, 0.022, 0.030), (0.051, 0.054, 0.057), short_steps=700, long_steps=1400, size=40, patch_radius=5, seed=0)
+        growth = max(study.rows, key=lambda row: row.active_fraction_delta)
+        fade = min(study.rows, key=lambda row: row.active_fraction_delta)
+        self.assertGreater(growth.active_fraction_delta, 0.05)
+        self.assertLess(fade.active_fraction_delta, -0.05)
+
+    def test_horizon_comparison_requires_longer_second_horizon(self) -> None:
+        with self.assertRaises(ValueError):
+            study_horizon_comparison(short_steps=700, long_steps=700)
 
 
 if __name__ == '__main__':

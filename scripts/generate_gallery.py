@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gray_scott_lab.analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_presets, study_time_evolution
-from gray_scott_lab.render import export_png_from_svg, render_metric_map, render_pattern_atlas, render_time_evolution
+from gray_scott_lab.analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_horizon_comparison, study_presets, study_time_evolution
+from gray_scott_lab.render import export_png_from_svg, render_horizon_comparison, render_metric_map, render_pattern_atlas, render_time_evolution
 ART = ROOT / 'art'
 REPORTS = ROOT / 'reports'
 NOTEBOOKS = ROOT / 'notebooks'
@@ -255,11 +255,184 @@ def write_time_evolution() -> tuple[Path, Path, Path, Path]:
     return svg_path, csv_path, report_path, notebook_path
 
 
+def write_horizon_comparison() -> tuple[Path, Path, Path, Path]:
+    ART.mkdir(parents=True, exist_ok=True)
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    NOTEBOOKS.mkdir(parents=True, exist_ok=True)
+
+    study = study_horizon_comparison(SCAN_FEEDS, SCAN_KILLS, short_steps=700, long_steps=1400, size=40, patch_radius=5, seed=0)
+    svg_path = ART / 'gray-scott-horizon-comparison.svg'
+    png_path = ART / 'gray-scott-horizon-comparison.png'
+    csv_path = ART / 'gray-scott-horizon-comparison.csv'
+    report_path = REPORTS / 'horizon-comparison-sidecar.md'
+    notebook_path = NOTEBOOKS / 'gray_scott_horizon_comparison.ipynb'
+
+    svg_path.write_text(render_horizon_comparison(study, SCAN_FEEDS, SCAN_KILLS))
+    export_png_from_svg(svg_path, png_path, size=2200, dpi=300)
+
+    with csv_path.open('w', newline='') as handle:
+        writer = csv.writer(handle)
+        writer.writerow([
+            'feed',
+            'kill',
+            'short_steps',
+            'long_steps',
+            'short_active_fraction',
+            'long_active_fraction',
+            'active_fraction_delta',
+            'short_edge_density',
+            'long_edge_density',
+            'edge_density_delta',
+            'short_peak_v',
+            'long_peak_v',
+        ])
+        for row in study.rows:
+            writer.writerow([
+                row.feed,
+                row.kill,
+                study.short_steps,
+                study.long_steps,
+                row.short_metrics.active_fraction,
+                row.long_metrics.active_fraction,
+                row.active_fraction_delta,
+                row.short_metrics.edge_density,
+                row.long_metrics.edge_density,
+                row.edge_density_delta,
+                row.short_metrics.peak_v,
+                row.long_metrics.peak_v,
+            ])
+
+    peak_growth = max(study.rows, key=lambda row: row.active_fraction_delta)
+    biggest_fade = min(study.rows, key=lambda row: row.active_fraction_delta)
+    sharpest_gain = max(study.rows, key=lambda row: row.edge_density_delta)
+    strongest_smoothing = min(study.rows, key=lambda row: row.edge_density_delta)
+    median_abs_active = sorted(abs(row.active_fraction_delta) for row in study.rows)[len(study.rows) // 2]
+    median_abs_edge = sorted(abs(row.edge_density_delta) for row in study.rows)[len(study.rows) // 2]
+    lines = [
+        '# Gray-Scott horizon comparison sidecar',
+        '',
+        'The original parameter map was useful, but it left one honest question open: **how much of that coarse structure was already persistent, and how much was still transient because the run stopped early?**',
+        '',
+        'This sidecar keeps the feed/kill grid, seed, and spatial size fixed and only changes the simulation horizon from 700 to 1400 Euler steps.',
+        '',
+        '## What changed the most',
+        '',
+        f'- biggest late growth: `F = {peak_growth.feed:.3f}`, `k = {peak_growth.kill:.3f}` with `Δactive = {peak_growth.active_fraction_delta:+.3f}` and `Δedge = {peak_growth.edge_density_delta:+.4f}`',
+        f'- strongest fade: `F = {biggest_fade.feed:.3f}`, `k = {biggest_fade.kill:.3f}` with `Δactive = {biggest_fade.active_fraction_delta:+.3f}` and `Δedge = {biggest_fade.edge_density_delta:+.4f}`',
+        f'- sharpest late interface growth: `F = {sharpest_gain.feed:.3f}`, `k = {sharpest_gain.kill:.3f}` with `Δedge = {sharpest_gain.edge_density_delta:+.4f}`',
+        f'- strongest interface smoothing: `F = {strongest_smoothing.feed:.3f}`, `k = {strongest_smoothing.kill:.3f}` with `Δedge = {strongest_smoothing.edge_density_delta:+.4f}`',
+        '',
+        '## The practical read',
+        '',
+        f'- median absolute active-fraction shift across the whole grid: `{median_abs_active:.3f}`',
+        f'- median absolute edge-density shift across the whole grid: `{median_abs_edge:.4f}`',
+        '- some cells that looked mature at 700 steps were still transient and cooled sharply by 1400 steps',
+        '- some middle-band settings kept growing into busier, sharper patterns instead of simply freezing in place',
+        '- that makes the first parameter map a good scouting pass, not a finished phase diagram',
+        '',
+        '## Caveat',
+        '',
+        'This still holds grid size and seed fixed. It separates **time-horizon drift** from the original map, but it does not yet answer whether the same cells stay stable under a larger lattice or a different initialization patch.',
+        '',
+        'Open `art/gray-scott-horizon-comparison.png`, `art/gray-scott-horizon-comparison.csv`, and `notebooks/gray_scott_horizon_comparison.ipynb` together next.',
+    ]
+    report_path.write_text('\n'.join(lines) + '\n')
+
+    notebook = {
+        'cells': [
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '# Gray-Scott horizon comparison\n',
+                    '\n',
+                    'This notebook is the slower companion to `reports/horizon-comparison-sidecar.md`.\n',
+                    '\n',
+                    'The question is narrow and worth asking before the repo starts talking like it owns a phase diagram: **which feed-kill cells were already persistent at 700 steps, and which ones were still drifting?**\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 1. Hold the chemistry fixed and only change the horizon\n',
+                    '\n',
+                    'The Gray-Scott update used here is still the standard explicit Euler step\n',
+                    '\n',
+                    '$$u_{t+1} = u_t + D_u \\nabla^2 u_t - u_t v_t^2 + F(1-u_t),$$\n',
+                    '$$v_{t+1} = v_t + D_v \\nabla^2 v_t + u_t v_t^2 - (F+k) v_t.$$\n',
+                    '\n',
+                    'This sidecar changes neither `F`, `k`, nor the lattice rules. It only asks what happens when the same coarse scan runs twice as long.\n',
+                ],
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'from gray_scott_lab.analysis import SCAN_FEEDS, SCAN_KILLS, study_horizon_comparison\n',
+                    '\n',
+                    'study = study_horizon_comparison(SCAN_FEEDS, SCAN_KILLS, short_steps=700, long_steps=1400)\n',
+                    '[(row.feed, row.kill, round(row.active_fraction_delta, 3), round(row.edge_density_delta, 4)) for row in sorted(study.rows, key=lambda row: abs(row.active_fraction_delta), reverse=True)[:6]]\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 2. The new figure\n',
+                    '\n',
+                    '![Gray-Scott horizon comparison](../art/gray-scott-horizon-comparison.png)\n',
+                    '\n',
+                    'Read it like this:\n',
+                    '\n',
+                    '1. the upper-left map is the old scouting pass at 700 steps\n',
+                    '2. the upper-right map shows which cells kept spreading chemically and which ones were overconfident early reads\n',
+                    '3. the lower-left map shows the same grid after the longer run\n',
+                    '4. the lower-right map shows where the interfaces sharpened further and where they smoothed away\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 3. What this does and does not settle\n',
+                    '\n',
+                    'The useful lesson is not just that some cells change. It is that they change **unevenly**. Some settings are already basically themselves at the shorter horizon, while others are still migrating toward either a denser banded field or a near-extinct one.\n',
+                    '\n',
+                    'That means the first map should be read as a scouting surface, not as a complete regime census.\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## Problems worth trying next\n',
+                    '\n',
+                    '1. Repeat the same comparison at one larger lattice size to separate horizon drift from finite-size drift.\n',
+                    '2. Keep the horizon fixed and vary the seeded patch radius to see which cells are initialization-sensitive.\n',
+                    '3. Add one compact classifier that tags cells as growing, fading, or largely settled without pretending those categories are universal.\n',
+                ],
+            },
+        ],
+        'metadata': {
+            'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
+            'language_info': {'name': 'python', 'version': '3.11'},
+        },
+        'nbformat': 4,
+        'nbformat_minor': 5,
+    }
+    notebook_path.write_text(json.dumps(notebook, indent=2) + '\n')
+    return svg_path, csv_path, report_path, notebook_path
+
+
 def main() -> None:
     atlas_path = write_atlas()
     map_path, csv_path = write_metric_map()
     report_path = write_report()
     timeline_path, timeline_csv_path, timeline_report_path, timeline_notebook_path = write_time_evolution()
+    horizon_path, horizon_csv_path, horizon_report_path, horizon_notebook_path = write_horizon_comparison()
     print(atlas_path)
     print(map_path)
     print(csv_path)
@@ -268,6 +441,10 @@ def main() -> None:
     print(timeline_csv_path)
     print(timeline_report_path)
     print(timeline_notebook_path)
+    print(horizon_path)
+    print(horizon_csv_path)
+    print(horizon_report_path)
+    print(horizon_notebook_path)
 
 
 if __name__ == '__main__':

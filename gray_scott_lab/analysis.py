@@ -42,6 +42,32 @@ class TimeEvolutionStudy:
     timeline: tuple[TimeSeriesPoint, ...]
 
 
+@dataclass(frozen=True)
+class HorizonComparisonRow:
+    feed: float
+    kill: float
+    short_metrics: PatternMetrics
+    long_metrics: PatternMetrics
+
+    @property
+    def active_fraction_delta(self) -> float:
+        return self.long_metrics.active_fraction - self.short_metrics.active_fraction
+
+    @property
+    def edge_density_delta(self) -> float:
+        return self.long_metrics.edge_density - self.short_metrics.edge_density
+
+
+@dataclass(frozen=True)
+class HorizonComparisonStudy:
+    short_steps: int
+    long_steps: int
+    size: int
+    patch_radius: int
+    seed: int
+    rows: tuple[HorizonComparisonRow, ...]
+
+
 CURATED_PRESETS: tuple[GrayScottPreset, ...] = (
     GrayScottPreset(name='sparse spots', feed=0.014, kill=0.054, steps=1800, size=72, patch_radius=7, seed=0),
     GrayScottPreset(name='worm bands', feed=0.022, kill=0.051, steps=1600, size=72, patch_radius=7, seed=0),
@@ -141,3 +167,61 @@ def study_time_evolution(
     snapshots = tuple((step, state_lookup[step]) for step in usable_snapshot_steps)
     timeline = tuple(TimeSeriesPoint(step=step, metrics=measure_pattern(state_lookup[step])) for step in timeline_steps)
     return TimeEvolutionStudy(preset=preset, snapshots=snapshots, timeline=timeline)
+
+
+def study_horizon_comparison(
+    feeds: tuple[float, ...] = SCAN_FEEDS,
+    kills: tuple[float, ...] = SCAN_KILLS,
+    *,
+    short_steps: int = 700,
+    long_steps: int = 1400,
+    size: int = 40,
+    patch_radius: int = 5,
+    seed: int = 0,
+) -> HorizonComparisonStudy:
+    if short_steps < 0 or long_steps < 0:
+        raise ValueError('step counts must be non-negative')
+    if long_steps <= short_steps:
+        raise ValueError('long_steps must be greater than short_steps')
+
+    short_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=size,
+            steps=short_steps,
+            patch_radius=patch_radius,
+            seed=seed,
+        )
+    }
+    long_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=size,
+            steps=long_steps,
+            patch_radius=patch_radius,
+            seed=seed,
+        )
+    }
+
+    rows = tuple(
+        HorizonComparisonRow(
+            feed=feed,
+            kill=kill,
+            short_metrics=short_rows[(feed, kill)].metrics,
+            long_metrics=long_rows[(feed, kill)].metrics,
+        )
+        for kill in kills
+        for feed in feeds
+    )
+    return HorizonComparisonStudy(
+        short_steps=short_steps,
+        long_steps=long_steps,
+        size=size,
+        patch_radius=patch_radius,
+        seed=seed,
+        rows=rows,
+    )
