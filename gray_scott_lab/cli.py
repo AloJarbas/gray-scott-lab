@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-from .analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, measure_pattern, preset_by_name, scan_parameter_grid, study_horizon_comparison, study_presets, study_time_evolution
+from .analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, measure_pattern, preset_by_name, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_presets, study_time_evolution
 from .core import GrayScottParameters, simulate
-from .render import export_png_from_svg, render_horizon_comparison, render_metric_map, render_pattern_atlas, render_time_evolution
+from .render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_metric_map, render_pattern_atlas, render_time_evolution
 
 
 def parse_series(value: str) -> tuple[float, ...]:
@@ -54,6 +54,18 @@ def main() -> None:
     horizon_parser.add_argument('--seed', type=int, default=0)
     horizon_parser.add_argument('--output', type=Path, required=True)
     horizon_parser.add_argument('--png-output', type=Path, default=None)
+
+    grid_size_parser = subparsers.add_parser('render-grid-size-comparison', help='render a smaller-vs-larger lattice comparison for the feed/kill scan')
+    grid_size_parser.add_argument('--feeds', type=parse_series, default=SCAN_FEEDS)
+    grid_size_parser.add_argument('--kills', type=parse_series, default=SCAN_KILLS)
+    grid_size_parser.add_argument('--steps', type=int, default=1400)
+    grid_size_parser.add_argument('--small-size', type=int, default=40)
+    grid_size_parser.add_argument('--large-size', type=int, default=72)
+    grid_size_parser.add_argument('--small-patch-radius', type=int, default=5)
+    grid_size_parser.add_argument('--large-patch-radius', type=int, default=None)
+    grid_size_parser.add_argument('--seed', type=int, default=0)
+    grid_size_parser.add_argument('--output', type=Path, required=True)
+    grid_size_parser.add_argument('--png-output', type=Path, default=None)
 
     args = parser.parse_args()
 
@@ -106,6 +118,24 @@ def main() -> None:
             seed=args.seed,
         )
         content = render_horizon_comparison(study, args.feeds, args.kills)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(content)
+        if args.png_output is not None:
+            export_png_from_svg(args.output, args.png_output, size=2200, dpi=300)
+        return
+
+    if args.command == 'render-grid-size-comparison':
+        study = study_grid_size_comparison(
+            feeds=args.feeds,
+            kills=args.kills,
+            steps=args.steps,
+            small_size=args.small_size,
+            large_size=args.large_size,
+            small_patch_radius=args.small_patch_radius,
+            large_patch_radius=args.large_patch_radius,
+            seed=args.seed,
+        )
+        content = render_grid_size_comparison(study, args.feeds, args.kills)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(content)
         if args.png_output is not None:

@@ -21,13 +21,13 @@ This repo starts with a fixed seeded perturbation and then asks two day-one ques
 ## What is here
 
 - `gray_scott_lab/core.py`: deterministic seeding, explicit Euler updates, simulation helpers, and sampled trajectory capture for time-evolution studies
-- `gray_scott_lab/analysis.py`: curated presets, pattern metrics for activity and interface sharpness, a time-evolution study for the worm-band lane, and a new short-vs-long horizon comparison for the coarse parameter grid
-- `gray_scott_lab/render.py`: SVG atlas, parameter-map, time-evolution, and horizon-comparison renderers plus PNG export
-- `gray_scott_lab/cli.py`: one-shot summaries plus atlas, metric-map, time-evolution, and horizon-comparison rendering commands
+- `gray_scott_lab/analysis.py`: curated presets, pattern metrics for activity and interface sharpness, a time-evolution study for the worm-band lane, a short-vs-long horizon comparison for the coarse parameter grid, and now a larger-lattice comparison that separates finite-size drift from the earlier time-horizon story
+- `gray_scott_lab/render.py`: SVG atlas, parameter-map, time-evolution, horizon-comparison, and grid-size-comparison renderers plus PNG export
+- `gray_scott_lab/cli.py`: one-shot summaries plus atlas, metric-map, time-evolution, horizon-comparison, and grid-size-comparison rendering commands
 - `scripts/generate_gallery.py`: rebuild the public artifacts, CSV sidecars, reports, and notebooks in one pass
-- `reports/pattern-atlas-and-parameter-scan.md`, `reports/time-evolution-sidecar.md`, and `reports/horizon-comparison-sidecar.md`: technical sidecars for reading the regimes as final states, growth processes, and horizon-sensitive scans
-- `notebooks/gray_scott_regimes.ipynb`, `notebooks/gray_scott_time_evolution.ipynb`, and `notebooks/gray_scott_horizon_comparison.ipynb`: slower companions with equations, code, and interpretation
-- `tests/test_core.py`: small checks for determinism, bounds, regime separation, time-evolution sampling, and the new horizon-comparison drift
+- `reports/pattern-atlas-and-parameter-scan.md`, `reports/time-evolution-sidecar.md`, `reports/horizon-comparison-sidecar.md`, and `reports/grid-size-comparison-sidecar.md`: technical sidecars for reading the regimes as final states, growth processes, horizon-sensitive scans, and now finite-size-sensitive scans
+- `notebooks/gray_scott_regimes.ipynb`, `notebooks/gray_scott_time_evolution.ipynb`, `notebooks/gray_scott_horizon_comparison.ipynb`, and `notebooks/gray_scott_grid_size_comparison.ipynb`: slower companions with equations, code, and interpretation
+- `tests/test_core.py`: small checks for determinism, bounds, regime separation, time-evolution sampling, horizon-comparison drift, and the new grid-size sensitivity pass
 
 ## Generated artifacts
 
@@ -46,6 +46,10 @@ This repo starts with a fixed seeded perturbation and then asks two day-one ques
 ### Horizon comparison sidecar
 
 <img src="art/gray-scott-horizon-comparison.png" width="980" alt="Gray-Scott horizon comparison card showing the coarse scan at 700 and 1400 steps plus active-fraction and edge-density drift maps" />
+
+### Grid-size comparison sidecar
+
+<img src="art/gray-scott-grid-size-comparison.png" width="980" alt="Gray-Scott grid-size comparison card showing the coarse scan on 40x40 and 72x72 lattices plus active-fraction and edge-density drift maps" />
 
 ## Run it
 
@@ -84,18 +88,25 @@ Render the short-vs-long horizon comparison for the coarse scan:
 python3 -m gray_scott_lab.cli render-horizon-comparison --output art/gray-scott-horizon-comparison.svg --png-output art/gray-scott-horizon-comparison.png
 ```
 
+Render the smaller-vs-larger lattice comparison for the same coarse scan:
+
+```bash
+python3 -m gray_scott_lab.cli render-grid-size-comparison --output art/gray-scott-grid-size-comparison.svg --png-output art/gray-scott-grid-size-comparison.png
+```
+
 ## Why this repo is interesting
 
 Most introductions stop at pretty pictures. This one starts building a reusable measurement lane:
 
 - the atlas gives four reproducible regimes with fixed initialization and step counts
 - the parameter scan turns the chemistry knobs into an experiment instead of a list of screenshot captions
-- the new time-evolution sidecar shows one regime as a growth process instead of only a final frame
-- the new horizon-comparison sidecar checks whether the coarse scan had already settled or was still moving under a longer run
+- the time-evolution sidecar shows one regime as a growth process instead of only a final frame
+- the horizon-comparison sidecar checks whether the coarse scan had already settled or was still moving under a longer run
+- the new grid-size comparison sidecar checks which longer-run cells stay stable on a larger lattice and which ones were still being steered by the small box
 - the CSV, reports, notebooks, and tests make it easier to deepen into a real regime study later
 
 ## Good next moves
 
-- compare the same parameter scan at one larger grid size now that the horizon-comparison pass has already separated time drift from the first cutoff story
-- add one bounded note on how much the seeded patch controls the outcome before claiming a broad phase diagram
+- add one bounded note on how much the seeded patch controls the outcome before claiming a broad phase diagram now that both horizon drift and finite-size drift have their own sidecars
+- add one compact settled/growing/fading tag only if it sharpens the story instead of pretending to be a universal classifier
 - extend the chemistry lane with one second reaction-diffusion model only if it reveals a genuinely different pattern family instead of duplicating the same feed/kill story

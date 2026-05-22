@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gray_scott_lab.analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_horizon_comparison, study_presets, study_time_evolution
-from gray_scott_lab.render import export_png_from_svg, render_horizon_comparison, render_metric_map, render_pattern_atlas, render_time_evolution
+from gray_scott_lab.analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_presets, study_time_evolution
+from gray_scott_lab.render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_metric_map, render_pattern_atlas, render_time_evolution
 ART = ROOT / 'art'
 REPORTS = ROOT / 'reports'
 NOTEBOOKS = ROOT / 'notebooks'
@@ -427,12 +427,191 @@ def write_horizon_comparison() -> tuple[Path, Path, Path, Path]:
     return svg_path, csv_path, report_path, notebook_path
 
 
+def write_grid_size_comparison() -> tuple[Path, Path, Path, Path]:
+    ART.mkdir(parents=True, exist_ok=True)
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    NOTEBOOKS.mkdir(parents=True, exist_ok=True)
+
+    study = study_grid_size_comparison(SCAN_FEEDS, SCAN_KILLS, steps=1400, small_size=40, large_size=72, small_patch_radius=5, seed=0)
+    svg_path = ART / 'gray-scott-grid-size-comparison.svg'
+    png_path = ART / 'gray-scott-grid-size-comparison.png'
+    csv_path = ART / 'gray-scott-grid-size-comparison.csv'
+    report_path = REPORTS / 'grid-size-comparison-sidecar.md'
+    notebook_path = NOTEBOOKS / 'gray_scott_grid_size_comparison.ipynb'
+
+    svg_path.write_text(render_grid_size_comparison(study, SCAN_FEEDS, SCAN_KILLS))
+    export_png_from_svg(svg_path, png_path, size=2200, dpi=300)
+
+    with csv_path.open('w', newline='') as handle:
+        writer = csv.writer(handle)
+        writer.writerow([
+            'feed',
+            'kill',
+            'steps',
+            'small_size',
+            'large_size',
+            'small_patch_radius',
+            'large_patch_radius',
+            'small_active_fraction',
+            'large_active_fraction',
+            'active_fraction_delta',
+            'small_edge_density',
+            'large_edge_density',
+            'edge_density_delta',
+            'small_peak_v',
+            'large_peak_v',
+        ])
+        for row in study.rows:
+            writer.writerow([
+                row.feed,
+                row.kill,
+                study.steps,
+                study.small_size,
+                study.large_size,
+                study.small_patch_radius,
+                study.large_patch_radius,
+                row.small_metrics.active_fraction,
+                row.large_metrics.active_fraction,
+                row.active_fraction_delta,
+                row.small_metrics.edge_density,
+                row.large_metrics.edge_density,
+                row.edge_density_delta,
+                row.small_metrics.peak_v,
+                row.large_metrics.peak_v,
+            ])
+
+    biggest_growth = max(study.rows, key=lambda row: row.active_fraction_delta)
+    biggest_fade = min(study.rows, key=lambda row: row.active_fraction_delta)
+    sharpest_gain = max(study.rows, key=lambda row: row.edge_density_delta)
+    strongest_smoothing = min(study.rows, key=lambda row: row.edge_density_delta)
+    median_abs_active = sorted(abs(row.active_fraction_delta) for row in study.rows)[len(study.rows) // 2]
+    median_abs_edge = sorted(abs(row.edge_density_delta) for row in study.rows)[len(study.rows) // 2]
+    lines = [
+        '# Gray-Scott grid-size comparison sidecar',
+        '',
+        'The horizon comparison settled one honest question: some cells were still changing because the run was too short. This follow-up asks the next one: **after the longer run, which cells still depend on the lattice size itself?**',
+        '',
+        f'This sidecar holds the feed/kill grid, seed, and {study.steps}-step horizon fixed. It then compares the same scan on a `{study.small_size}×{study.small_size}` lattice and a `{study.large_size}×{study.large_size}` lattice while scaling the seeded patch from radius `{study.small_patch_radius}` to `{study.large_patch_radius}` so the initial disturbance stays roughly proportional to the box.',
+        '',
+        '## What changed the most',
+        '',
+        f'- biggest larger-lattice growth: `F = {biggest_growth.feed:.3f}`, `k = {biggest_growth.kill:.3f}` with `Δactive = {biggest_growth.active_fraction_delta:+.3f}` and `Δedge = {biggest_growth.edge_density_delta:+.4f}`',
+        f'- biggest larger-lattice fade: `F = {biggest_fade.feed:.3f}`, `k = {biggest_fade.kill:.3f}` with `Δactive = {biggest_fade.active_fraction_delta:+.3f}` and `Δedge = {biggest_fade.edge_density_delta:+.4f}`',
+        f'- sharpest larger-lattice front growth: `F = {sharpest_gain.feed:.3f}`, `k = {sharpest_gain.kill:.3f}` with `Δedge = {sharpest_gain.edge_density_delta:+.4f}`',
+        f'- strongest larger-lattice smoothing: `F = {strongest_smoothing.feed:.3f}`, `k = {strongest_smoothing.kill:.3f}` with `Δedge = {strongest_smoothing.edge_density_delta:+.4f}`',
+        '',
+        '## The practical read',
+        '',
+        f'- median absolute active-fraction shift across the whole grid: `{median_abs_active:.3f}`',
+        f'- median absolute edge-density shift across the whole grid: `{median_abs_edge:.4f}`',
+        '- several cells barely move, which is good news: the first chemistry story survives a larger arena',
+        '- some cells do move a lot, especially where the smaller lattice either trapped the fronts too tightly or let the initial patch dominate too much of the field',
+        '- that means the coarse map is maturing into a real packet: horizon drift and finite-size drift are now separate failure modes instead of one vague caution',
+        '',
+        '## Caveat',
+        '',
+        'This still uses one deterministic seed and one scaled patch rule. It is a bounded finite-size check, not a universal claim that the whole Gray-Scott regime atlas is now settled.',
+        '',
+        'Open `art/gray-scott-grid-size-comparison.png`, `art/gray-scott-grid-size-comparison.csv`, and `notebooks/gray_scott_grid_size_comparison.ipynb` together next.',
+    ]
+    report_path.write_text('\n'.join(lines) + '\n')
+
+    notebook = {
+        'cells': [
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '# Gray-Scott grid-size comparison\n',
+                    '\n',
+                    'This notebook is the slower companion to `reports/grid-size-comparison-sidecar.md`.\n',
+                    '\n',
+                    'The question is the honest next one after the horizon pass: **once the run is long enough, which feed-kill cells still change because the box itself is larger?**\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 1. Hold the chemistry and horizon fixed, then change the arena\n',
+                    '\n',
+                    'The Gray-Scott update stays the same:\n',
+                    '\n',
+                    '$$u_{t+1} = u_t + D_u \\nabla^2 u_t - u_t v_t^2 + F(1-u_t),$$\n',
+                    '$$v_{t+1} = v_t + D_v \\nabla^2 v_t + u_t v_t^2 - (F+k) v_t.$$\n',
+                    '\n',
+                    f'This pass fixes the horizon at `{study.steps}` steps, keeps the same feed-kill grid and deterministic seed, and compares `{study.small_size}×{study.small_size}` against `{study.large_size}×{study.large_size}` while scaling the seeded patch from radius `{study.small_patch_radius}` to `{study.large_patch_radius}`.\n',
+                ],
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'from gray_scott_lab.analysis import SCAN_FEEDS, SCAN_KILLS, study_grid_size_comparison\n',
+                    '\n',
+                    'study = study_grid_size_comparison(SCAN_FEEDS, SCAN_KILLS, steps=1400, small_size=40, large_size=72, small_patch_radius=5)\n',
+                    '[(row.feed, row.kill, round(row.active_fraction_delta, 3), round(row.edge_density_delta, 4)) for row in sorted(study.rows, key=lambda row: abs(row.active_fraction_delta), reverse=True)[:6]]\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 2. The new figure\n',
+                    '\n',
+                    '![Gray-Scott grid-size comparison](../art/gray-scott-grid-size-comparison.png)\n',
+                    '\n',
+                    'Read it like this:\n',
+                    '\n',
+                    '1. the upper-left map is the smaller-lattice scan\n',
+                    '2. the upper-right map shows which cells get busier or quieter on the larger lattice\n',
+                    '3. the lower-left map is the same chemistry on the larger lattice\n',
+                    '4. the lower-right map shows whether the front sharpness grows or smooths out when the arena gets bigger\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 3. What this settles and what it does not\n',
+                    '\n',
+                    'The useful lesson is not that every cell changes. It is the opposite: **many cells barely move, while a smaller set still carry real finite-size drift.**\n',
+                    '\n',
+                    'That gives the repo a cleaner story. Horizon drift and finite-size drift are now separate checks, and both can be pointed to with concrete artifacts instead of hand-waving.\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## Problems worth trying next\n',
+                    '\n',
+                    '1. Keep the larger lattice and vary the seed patch radius to measure initialization sensitivity directly.\n',
+                    '2. Add one compact settled/growing/fading tag only if it stays descriptive instead of pretending to be a universal classifier.\n',
+                    '3. Try one second reaction-diffusion model only if it changes the pattern-family story instead of cloning the same workflow.\n',
+                ],
+            },
+        ],
+        'metadata': {
+            'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
+            'language_info': {'name': 'python', 'version': '3.11'},
+        },
+        'nbformat': 4,
+        'nbformat_minor': 5,
+    }
+    notebook_path.write_text(json.dumps(notebook, indent=2) + '\n')
+    return svg_path, csv_path, report_path, notebook_path
+
+
 def main() -> None:
     atlas_path = write_atlas()
     map_path, csv_path = write_metric_map()
     report_path = write_report()
     timeline_path, timeline_csv_path, timeline_report_path, timeline_notebook_path = write_time_evolution()
     horizon_path, horizon_csv_path, horizon_report_path, horizon_notebook_path = write_horizon_comparison()
+    grid_size_path, grid_size_csv_path, grid_size_report_path, grid_size_notebook_path = write_grid_size_comparison()
     print(atlas_path)
     print(map_path)
     print(csv_path)
@@ -445,6 +624,10 @@ def main() -> None:
     print(horizon_csv_path)
     print(horizon_report_path)
     print(horizon_notebook_path)
+    print(grid_size_path)
+    print(grid_size_csv_path)
+    print(grid_size_report_path)
+    print(grid_size_notebook_path)
 
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import tempfile
 
-from .analysis import HorizonComparisonStudy, ParameterScanRow, PresetStudy, TimeEvolutionStudy
+from .analysis import GridSizeComparisonStudy, HorizonComparisonStudy, ParameterScanRow, PresetStudy, TimeEvolutionStudy
 
 
 def svg_text(x: float, y: float, text: str, klass: str, anchor: str = 'start') -> str:
@@ -321,6 +321,125 @@ def render_horizon_comparison(study: HorizonComparisonStudy, feeds: tuple[float,
     parts.append(svg_paragraph(72, 1452, [
         'This is the practical read: the coarse map was useful, but not every bright cell had finished becoming itself.',
         'Some settings keep growing into clearer bands, while others looked active early and then cooled almost all the way out.',
+    ], 'small', line_height=22.0))
+    parts.append('</svg>')
+    return '\n'.join(parts) + '\n'
+
+
+def render_grid_size_comparison(study: GridSizeComparisonStudy, feeds: tuple[float, ...], kills: tuple[float, ...]) -> str:
+    width, height = 1220, 1540
+    parts = base_svg(
+        width,
+        height,
+        'Gray-Scott grid-size comparison',
+        f'Same feed-vs-kill scan after {study.steps} steps on {study.small_size}x{study.small_size} and {study.large_size}x{study.large_size} lattices. A finite-size check for which cells stay robust in a bigger arena.',
+    )
+
+    cell = 82
+    panel_w = cell * len(feeds) + 136
+    panel_h = cell * len(kills) + 150
+    positions = [
+        (72, 156),
+        (648, 156),
+        (72, 748),
+        (648, 748),
+    ]
+
+    lookup = {(row.feed, row.kill): row for row in study.rows}
+    small_active = [row.small_metrics.active_fraction for row in study.rows]
+    large_active = [row.large_metrics.active_fraction for row in study.rows]
+    active_delta = [row.active_fraction_delta for row in study.rows]
+    edge_delta = [row.edge_density_delta for row in study.rows]
+    active_vmin = min(small_active + large_active)
+    active_vmax = max(small_active + large_active)
+    active_delta_scale = max(abs(value) for value in active_delta) if active_delta else 1.0
+    edge_delta_scale = max(abs(value) for value in edge_delta) if edge_delta else 1.0
+
+    biggest_growth = max(study.rows, key=lambda row: row.active_fraction_delta)
+    biggest_fade = min(study.rows, key=lambda row: row.active_fraction_delta)
+    sharpest_gain = max(study.rows, key=lambda row: row.edge_density_delta)
+    strongest_smoothing = min(study.rows, key=lambda row: row.edge_density_delta)
+
+    def draw_panel(
+        left: float,
+        top: float,
+        title: str,
+        subtitle: str,
+        *,
+        getter,
+        formatter,
+        color_fn,
+        label_color_fn,
+    ) -> None:
+        parts.append(f'<rect x="{left}" y="{top}" width="{panel_w}" height="{panel_h}" class="panel"/>')
+        parts.append(svg_text(left + 24, top + 34, title, 'label'))
+        parts.append(svg_paragraph(left + 24, top + 58, [subtitle], 'small', line_height=18.0))
+        grid_left = left + 24
+        grid_top = top + 116
+
+        for column, feed in enumerate(feeds):
+            x = grid_left + column * cell
+            parts.append(svg_text(x + cell / 2, grid_top - 18, f'{feed:.3f}', 'small', 'middle'))
+        parts.append(svg_text(grid_left + cell * len(feeds) / 2, grid_top - 44, 'feed rate F', 'small', 'middle'))
+
+        for row_index, kill in enumerate(kills):
+            y = grid_top + row_index * cell
+            parts.append(svg_text(grid_left - 18, y + cell / 2 + 6, f'{kill:.3f}', 'small', 'end'))
+            for column, feed in enumerate(feeds):
+                x = grid_left + column * cell
+                entry = lookup[(feed, kill)]
+                value = getter(entry)
+                fill = color_fn(value)
+                label_fill = label_color_fn(value)
+                parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{cell - 6}" height="{cell - 6}" fill="{fill}" rx="10"/>')
+                parts.append(f'<text x="{x + (cell - 6) / 2:.1f}" y="{y + cell / 2 - 2:.1f}" class="cell-label" text-anchor="middle" fill="{label_fill}">{formatter(value)}</text>')
+
+    draw_panel(
+        *positions[0],
+        f'active fraction at {study.small_size}×{study.small_size}',
+        f'The smaller lattice with patch radius {study.small_patch_radius}.',
+        getter=lambda row: row.small_metrics.active_fraction,
+        formatter=lambda value: f'{value:.3f}',
+        color_fn=lambda value: metric_color(value, active_vmin, active_vmax),
+        label_color_fn=lambda value: metric_label_color(value, active_vmin, active_vmax),
+    )
+    draw_panel(
+        *positions[1],
+        f'active-fraction delta ({study.large_size} vs {study.small_size})',
+        'Positive = busier on the larger lattice. Negative = the small box overread occupancy.',
+        getter=lambda row: row.active_fraction_delta,
+        formatter=lambda value: f'{value:+.3f}',
+        color_fn=lambda value: delta_color(value, active_delta_scale),
+        label_color_fn=lambda value: delta_label_color(value, active_delta_scale),
+    )
+    draw_panel(
+        *positions[2],
+        f'active fraction at {study.large_size}×{study.large_size}',
+        f'The larger lattice with scaled patch radius {study.large_patch_radius}.',
+        getter=lambda row: row.large_metrics.active_fraction,
+        formatter=lambda value: f'{value:.3f}',
+        color_fn=lambda value: metric_color(value, active_vmin, active_vmax),
+        label_color_fn=lambda value: metric_label_color(value, active_vmin, active_vmax),
+    )
+    draw_panel(
+        *positions[3],
+        f'edge-density delta ({study.large_size} vs {study.small_size})',
+        'Positive = sharper fronts on the larger lattice. Negative = smoothing or box bias.',
+        getter=lambda row: row.edge_density_delta,
+        formatter=lambda value: f'{value:+.3f}',
+        color_fn=lambda value: delta_color(value, edge_delta_scale),
+        label_color_fn=lambda value: delta_label_color(value, edge_delta_scale),
+    )
+
+    parts.append(svg_paragraph(72, 1350, [
+        f'Biggest larger-lattice growth: F={biggest_growth.feed:.3f}, k={biggest_growth.kill:.3f}, Δactive={biggest_growth.active_fraction_delta:+.3f}.',
+        f'Biggest larger-lattice fade: F={biggest_fade.feed:.3f}, k={biggest_fade.kill:.3f}, Δactive={biggest_fade.active_fraction_delta:+.3f}.',
+        f'Sharpest larger-lattice front growth: F={sharpest_gain.feed:.3f}, k={sharpest_gain.kill:.3f}, Δedge={sharpest_gain.edge_density_delta:+.4f}.',
+        f'Strongest larger-lattice smoothing: F={strongest_smoothing.feed:.3f}, k={strongest_smoothing.kill:.3f}, Δedge={strongest_smoothing.edge_density_delta:+.4f}.',
+    ], 'small', line_height=22.0))
+    parts.append(svg_paragraph(72, 1452, [
+        'This is the practical read: some cells are genuinely robust, but others only look settled because the box is small.',
+        'The larger lattice mostly confirms the coarse story, then points to the cells where finite-size drift still matters before the repo starts talking like it owns a phase diagram.',
     ], 'small', line_height=22.0))
     parts.append('</svg>')
     return '\n'.join(parts) + '\n'

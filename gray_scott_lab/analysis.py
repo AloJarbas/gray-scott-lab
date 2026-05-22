@@ -68,6 +68,33 @@ class HorizonComparisonStudy:
     rows: tuple[HorizonComparisonRow, ...]
 
 
+@dataclass(frozen=True)
+class GridSizeComparisonRow:
+    feed: float
+    kill: float
+    small_metrics: PatternMetrics
+    large_metrics: PatternMetrics
+
+    @property
+    def active_fraction_delta(self) -> float:
+        return self.large_metrics.active_fraction - self.small_metrics.active_fraction
+
+    @property
+    def edge_density_delta(self) -> float:
+        return self.large_metrics.edge_density - self.small_metrics.edge_density
+
+
+@dataclass(frozen=True)
+class GridSizeComparisonStudy:
+    steps: int
+    small_size: int
+    large_size: int
+    small_patch_radius: int
+    large_patch_radius: int
+    seed: int
+    rows: tuple[GridSizeComparisonRow, ...]
+
+
 CURATED_PRESETS: tuple[GrayScottPreset, ...] = (
     GrayScottPreset(name='sparse spots', feed=0.014, kill=0.054, steps=1800, size=72, patch_radius=7, seed=0),
     GrayScottPreset(name='worm bands', feed=0.022, kill=0.051, steps=1600, size=72, patch_radius=7, seed=0),
@@ -80,6 +107,16 @@ SCAN_KILLS: tuple[float, ...] = (0.051, 0.054, 0.057, 0.060, 0.063)
 TIME_EVOLUTION_PRESET = CURATED_PRESETS[1]
 DEFAULT_SNAPSHOT_STEPS: tuple[int, ...] = (0, 60, 180, 360, 800, 1600)
 DEFAULT_TIMELINE_STEP = 40
+
+
+def scaled_patch_radius(size: int, *, reference_size: int = 40, reference_patch_radius: int = 5) -> int:
+    if size <= 0:
+        raise ValueError('size must be positive')
+    if reference_size <= 0:
+        raise ValueError('reference_size must be positive')
+    if reference_patch_radius <= 0:
+        raise ValueError('reference_patch_radius must be positive')
+    return max(1, round(reference_patch_radius * size / reference_size))
 
 
 def measure_pattern(state: GrayScottState, *, active_threshold: float = 0.15) -> PatternMetrics:
@@ -222,6 +259,80 @@ def study_horizon_comparison(
         long_steps=long_steps,
         size=size,
         patch_radius=patch_radius,
+        seed=seed,
+        rows=rows,
+    )
+
+
+def study_grid_size_comparison(
+    feeds: tuple[float, ...] = SCAN_FEEDS,
+    kills: tuple[float, ...] = SCAN_KILLS,
+    *,
+    steps: int = 1400,
+    small_size: int = 40,
+    large_size: int = 72,
+    small_patch_radius: int = 5,
+    large_patch_radius: int | None = None,
+    seed: int = 0,
+) -> GridSizeComparisonStudy:
+    if steps < 0:
+        raise ValueError('steps must be non-negative')
+    if small_size <= 0 or large_size <= 0:
+        raise ValueError('sizes must be positive')
+    if large_size <= small_size:
+        raise ValueError('large_size must be greater than small_size')
+    if small_patch_radius <= 0:
+        raise ValueError('small_patch_radius must be positive')
+
+    resolved_large_patch_radius = large_patch_radius
+    if resolved_large_patch_radius is None:
+        resolved_large_patch_radius = scaled_patch_radius(
+            large_size,
+            reference_size=small_size,
+            reference_patch_radius=small_patch_radius,
+        )
+    if resolved_large_patch_radius <= 0:
+        raise ValueError('large_patch_radius must be positive')
+
+    small_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=small_size,
+            steps=steps,
+            patch_radius=small_patch_radius,
+            seed=seed,
+        )
+    }
+    large_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=large_size,
+            steps=steps,
+            patch_radius=resolved_large_patch_radius,
+            seed=seed,
+        )
+    }
+
+    rows = tuple(
+        GridSizeComparisonRow(
+            feed=feed,
+            kill=kill,
+            small_metrics=small_rows[(feed, kill)].metrics,
+            large_metrics=large_rows[(feed, kill)].metrics,
+        )
+        for kill in kills
+        for feed in feeds
+    )
+    return GridSizeComparisonStudy(
+        steps=steps,
+        small_size=small_size,
+        large_size=large_size,
+        small_patch_radius=small_patch_radius,
+        large_patch_radius=resolved_large_patch_radius,
         seed=seed,
         rows=rows,
     )

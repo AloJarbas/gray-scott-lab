@@ -1,8 +1,24 @@
-from .analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, PatternMetrics, PresetStudy, ParameterScanRow, measure_pattern, scan_parameter_grid, study_presets
+from .analysis import (
+    CURATED_PRESETS,
+    SCAN_FEEDS,
+    SCAN_KILLS,
+    GridSizeComparisonRow,
+    GridSizeComparisonStudy,
+    ParameterScanRow,
+    PatternMetrics,
+    PresetStudy,
+    measure_pattern,
+    scan_parameter_grid,
+    scaled_patch_radius,
+    study_grid_size_comparison,
+    study_presets,
+)
 from .core import GrayScottParameters, GrayScottPreset, GrayScottState, seed_state, simulate, simulate_preset, step
 
 __all__ = [
     'CURATED_PRESETS',
+    'GridSizeComparisonRow',
+    'GridSizeComparisonStudy',
     'GrayScottParameters',
     'GrayScottPreset',
     'GrayScottState',
@@ -13,9 +29,11 @@ __all__ = [
     'SCAN_KILLS',
     'measure_pattern',
     'scan_parameter_grid',
+    'scaled_patch_radius',
     'seed_state',
     'simulate',
     'simulate_preset',
     'step',
+    'study_grid_size_comparison',
     'study_presets',
 ]

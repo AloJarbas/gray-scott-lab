@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from gray_scott_lab.analysis import TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, study_horizon_comparison, study_time_evolution
+from gray_scott_lab.analysis import TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, scaled_patch_radius, study_grid_size_comparison, study_horizon_comparison, study_time_evolution
 from gray_scott_lab.core import GrayScottParameters, seed_state, simulate, simulate_samples
 
 
@@ -51,6 +51,29 @@ class GrayScottTests(unittest.TestCase):
     def test_horizon_comparison_requires_longer_second_horizon(self) -> None:
         with self.assertRaises(ValueError):
             study_horizon_comparison(short_steps=700, long_steps=700)
+
+    def test_scaled_patch_radius_preserves_reference_case(self) -> None:
+        self.assertEqual(scaled_patch_radius(40), 5)
+        self.assertEqual(scaled_patch_radius(72), 9)
+
+    def test_grid_size_comparison_detects_lattice_sensitive_cells(self) -> None:
+        study = study_grid_size_comparison(
+            (0.014, 0.022, 0.030),
+            (0.051, 0.057, 0.063),
+            steps=900,
+            small_size=24,
+            large_size=48,
+            small_patch_radius=3,
+            seed=0,
+        )
+        growth = max(study.rows, key=lambda row: row.active_fraction_delta)
+        fade = min(study.rows, key=lambda row: row.active_fraction_delta)
+        self.assertGreater(growth.active_fraction_delta, 0.2)
+        self.assertLess(fade.active_fraction_delta, -0.04)
+
+    def test_grid_size_comparison_requires_larger_second_grid(self) -> None:
+        with self.assertRaises(ValueError):
+            study_grid_size_comparison(steps=900, small_size=40, large_size=40)
 
 
 if __name__ == '__main__':
