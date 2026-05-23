@@ -9,8 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gray_scott_lab.analysis import CURATED_PRESETS, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_presets, study_time_evolution
-from gray_scott_lab.render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_metric_map, render_pattern_atlas, render_time_evolution
+from gray_scott_lab.analysis import CURATED_PRESETS, INITIALIZATION_PROFILES, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_initialization_sensitivity, study_presets, study_time_evolution
+from gray_scott_lab.core import seed_profile_label
+from gray_scott_lab.render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_initialization_sensitivity, render_metric_map, render_pattern_atlas, render_time_evolution
 ART = ROOT / 'art'
 REPORTS = ROOT / 'reports'
 NOTEBOOKS = ROOT / 'notebooks'
@@ -605,6 +606,196 @@ def write_grid_size_comparison() -> tuple[Path, Path, Path, Path]:
     return svg_path, csv_path, report_path, notebook_path
 
 
+def write_initialization_sensitivity() -> tuple[Path, Path, Path, Path]:
+    ART.mkdir(parents=True, exist_ok=True)
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    NOTEBOOKS.mkdir(parents=True, exist_ok=True)
+
+    study = study_initialization_sensitivity(
+        SCAN_FEEDS,
+        SCAN_KILLS,
+        steps=1400,
+        size=40,
+        patch_radius=5,
+        seed=0,
+        profiles=INITIALIZATION_PROFILES,
+    )
+    svg_path = ART / 'gray-scott-initialization-sensitivity.svg'
+    png_path = ART / 'gray-scott-initialization-sensitivity.png'
+    csv_path = ART / 'gray-scott-initialization-sensitivity.csv'
+    report_path = REPORTS / 'initialization-sensitivity-sidecar.md'
+    notebook_path = NOTEBOOKS / 'gray_scott_initialization_sensitivity.ipynb'
+
+    svg_path.write_text(render_initialization_sensitivity(study, SCAN_FEEDS, SCAN_KILLS))
+    export_png_from_svg(svg_path, png_path, size=2200, dpi=300)
+
+    with csv_path.open('w', newline='') as handle:
+        writer = csv.writer(handle)
+        writer.writerow([
+            'feed',
+            'kill',
+            'steps',
+            'size',
+            'patch_radius',
+            'profiles',
+            'active_span',
+            'edge_span',
+            'active_winner_profile',
+            'active_loser_profile',
+            'center_active_fraction',
+            'double_active_fraction',
+            'ring_active_fraction',
+            'center_edge_density',
+            'double_edge_density',
+            'ring_edge_density',
+            'center_peak_v',
+            'double_peak_v',
+            'ring_peak_v',
+        ])
+        for row in study.rows:
+            writer.writerow([
+                row.feed,
+                row.kill,
+                study.steps,
+                study.size,
+                study.patch_radius,
+                ','.join(study.profiles),
+                row.active_span,
+                row.edge_span,
+                row.active_winner_profile,
+                row.active_loser_profile,
+                row.metrics_for('center').active_fraction,
+                row.metrics_for('double').active_fraction,
+                row.metrics_for('ring').active_fraction,
+                row.metrics_for('center').edge_density,
+                row.metrics_for('double').edge_density,
+                row.metrics_for('ring').edge_density,
+                row.metrics_for('center').peak_v,
+                row.metrics_for('double').peak_v,
+                row.metrics_for('ring').peak_v,
+            ])
+
+    biggest_active = max(study.rows, key=lambda row: row.active_span)
+    biggest_edge = max(study.rows, key=lambda row: row.edge_span)
+    robust_candidates = [row for row in study.rows if row.min_active_fraction > 0.05]
+    most_robust = min(robust_candidates, key=lambda row: (row.active_span + 30.0 * row.edge_span, -row.max_active_fraction)) if robust_candidates else min(study.rows, key=lambda row: (row.active_span + 30.0 * row.edge_span, -row.max_active_fraction))
+    median_active_span = sorted(row.active_span for row in study.rows)[len(study.rows) // 2]
+    median_edge_span = sorted(row.edge_span for row in study.rows)[len(study.rows) // 2]
+    lines = [
+        '# Gray-Scott initialization sensitivity sidecar',
+        '',
+        'The horizon and grid-size passes settled two honest caveats, but one important one remained: **how much of the coarse chemistry story still depends on the seeded patch itself?**',
+        '',
+        'This sidecar keeps the feed/kill grid, step count, and lattice size fixed. It only swaps between three bounded seed profiles with roughly comparable seeded mass:',
+        '',
+        '- centered square patch',
+        '- split twin patches',
+        '- annulus shell',
+        '',
+        '## What changed the most',
+        '',
+        f'- biggest active-fraction swing: `F = {biggest_active.feed:.3f}`, `k = {biggest_active.kill:.3f}` with `span = {biggest_active.active_span:.3f}` ({seed_profile_label(biggest_active.active_loser_profile)} -> {seed_profile_label(biggest_active.active_winner_profile)})',
+        f'- biggest edge-density swing: `F = {biggest_edge.feed:.3f}`, `k = {biggest_edge.kill:.3f}` with `span = {biggest_edge.edge_span:.4f}`',
+        f'- robust active counterexample: `F = {most_robust.feed:.3f}`, `k = {most_robust.kill:.3f}` stays active under every profile with only `span = {most_robust.active_span:.3f}`',
+        '',
+        '## The practical read',
+        '',
+        f'- median active-fraction span across the whole grid: `{median_active_span:.3f}`',
+        f'- median edge-density span across the whole grid: `{median_edge_span:.4f}`',
+        '- several cells are robust, which is good: the repo is not collapsing into “everything depends on the seed”',
+        '- some middle-band cells are not robust at all, which is equally useful: the same chemistry can flip from near-extinction to broad occupancy once the seeded patch is split or hollowed',
+        '- that means the coarse scan is now better framed as a scouting surface plus three bounded caveat passes: horizon, lattice size, and initialization geometry',
+        '',
+        '## Caveat',
+        '',
+        'These profiles are intentionally comparable, not identical. This pass measures seed-geometry sensitivity in a bounded way; it does not claim to have found one universal initialization family for the Gray-Scott model.',
+        '',
+        'Open `art/gray-scott-initialization-sensitivity.png`, `art/gray-scott-initialization-sensitivity.csv`, and `notebooks/gray_scott_initialization_sensitivity.ipynb` together next.',
+    ]
+    report_path.write_text('\n'.join(lines) + '\n')
+
+    notebook = {
+        'cells': [
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '# Gray-Scott initialization sensitivity\n',
+                    '\n',
+                    'This notebook is the slower companion to `reports/initialization-sensitivity-sidecar.md`.\n',
+                    '\n',
+                    'The bounded question is the useful one: **after horizon drift and finite-size drift are checked, how much of the remaining story still depends on the seeded patch geometry?**\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 1. Keep the chemistry fixed and only swap the seed profile\n',
+                    '\n',
+                    'The reaction-diffusion update is unchanged. Only the initial disturbance changes between three bounded shapes: centered square, split twin patches, and annulus shell.\n',
+                ],
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'from gray_scott_lab.analysis import INITIALIZATION_PROFILES, SCAN_FEEDS, SCAN_KILLS, study_initialization_sensitivity\n',
+                    '\n',
+                    'study = study_initialization_sensitivity(SCAN_FEEDS, SCAN_KILLS, profiles=INITIALIZATION_PROFILES)\n',
+                    '[(row.feed, row.kill, round(row.active_span, 3), round(row.edge_span, 4), row.active_loser_profile, row.active_winner_profile) for row in sorted(study.rows, key=lambda row: row.active_span, reverse=True)[:6]]\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 2. The new figure\n',
+                    '\n',
+                    '![Gray-Scott initialization sensitivity](../art/gray-scott-initialization-sensitivity.png)\n',
+                    '\n',
+                    'Read it in two passes:\n',
+                    '\n',
+                    '1. the heatmaps show where active fraction and edge density move the most under profile swaps\n',
+                    '2. the spotlight rows show what those swings actually look like in the final `V` field\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 3. What this settles and what it does not\n',
+                    '\n',
+                    'The useful lesson is not that every cell is fragile. It is that fragility is **localized**. Some chemistry settings are already profile-robust, while others still change dramatically if the same initial mass is concentrated, split, or hollowed out.\n',
+                    '\n',
+                    'That makes the repo’s current atlas more honest. The coarse scan is still worth keeping, but now it comes with three explicit caveat layers instead of one vague warning.\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## Problems worth trying next\n',
+                    '\n',
+                    '1. Add one compact settled/growing/fading tag only if it sharpens the caveat story instead of pretending to classify the whole model.\n',
+                    '2. Repeat the same profile swap on one larger lattice only if that changes the sensitivity map instead of redrawing it.\n',
+                    '3. Extend the chemistry lane with one second reaction-diffusion model only if it reveals a genuinely different pattern family.\n',
+                ],
+            },
+        ],
+        'metadata': {
+            'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
+            'language_info': {'name': 'python', 'version': '3.11'},
+        },
+        'nbformat': 4,
+        'nbformat_minor': 5,
+    }
+    notebook_path.write_text(json.dumps(notebook, indent=2) + '\n')
+    return svg_path, csv_path, report_path, notebook_path
+
+
 def main() -> None:
     atlas_path = write_atlas()
     map_path, csv_path = write_metric_map()
@@ -612,6 +803,7 @@ def main() -> None:
     timeline_path, timeline_csv_path, timeline_report_path, timeline_notebook_path = write_time_evolution()
     horizon_path, horizon_csv_path, horizon_report_path, horizon_notebook_path = write_horizon_comparison()
     grid_size_path, grid_size_csv_path, grid_size_report_path, grid_size_notebook_path = write_grid_size_comparison()
+    init_path, init_csv_path, init_report_path, init_notebook_path = write_initialization_sensitivity()
     print(atlas_path)
     print(map_path)
     print(csv_path)
@@ -628,6 +820,10 @@ def main() -> None:
     print(grid_size_csv_path)
     print(grid_size_report_path)
     print(grid_size_notebook_path)
+    print(init_path)
+    print(init_csv_path)
+    print(init_report_path)
+    print(init_notebook_path)
 
 
 if __name__ == '__main__':

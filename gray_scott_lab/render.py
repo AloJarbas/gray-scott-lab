@@ -6,7 +6,8 @@ import shutil
 import subprocess
 import tempfile
 
-from .analysis import GridSizeComparisonStudy, HorizonComparisonStudy, ParameterScanRow, PresetStudy, TimeEvolutionStudy
+from .analysis import GridSizeComparisonStudy, HorizonComparisonStudy, InitializationSensitivityStudy, ParameterScanRow, PresetStudy, TimeEvolutionStudy
+from .core import GrayScottState, seed_profile_label
 
 
 def svg_text(x: float, y: float, text: str, klass: str, anchor: str = 'start') -> str:
@@ -527,6 +528,124 @@ def render_time_evolution(study: TimeEvolutionStudy) -> str:
         f'Peak activity lands around step {peak_active.step} at {peak_active.metrics.active_fraction:.1%}.',
         f'Peak edge density lands around step {peak_edge.step} at {peak_edge.metrics.edge_density:.4f}.',
         'That is the useful split: filling in and sharpening are related, but they are not the same process.',
+    ], 'small', line_height=22.0))
+    parts.append('</svg>')
+    return '\n'.join(parts) + '\n'
+
+
+def _draw_state_thumbnail(parts: list[str], *, state: GrayScottState, left: float, top: float, pixel: float = 4.2) -> None:
+    for row_index, row in enumerate(state.v):
+        for col_index, value in enumerate(row):
+            parts.append(
+                f'<rect x="{left + col_index * pixel:.1f}" y="{top + row_index * pixel:.1f}" width="{pixel + 0.15:.1f}" height="{pixel + 0.15:.1f}" fill="{pattern_color(value)}"/>'
+            )
+
+
+def render_initialization_sensitivity(study: InitializationSensitivityStudy, feeds: tuple[float, ...], kills: tuple[float, ...]) -> str:
+    width, height = 1440, 1860
+    parts = base_svg(
+        width,
+        height,
+        'Gray-Scott initialization sensitivity',
+        f'The same feed-vs-kill grid after {study.steps} steps under three bounded seed profiles: centered square, split twin patches, and annulus shell.',
+    )
+
+    cell = 78
+    panel_w = cell * len(feeds) + 140
+    panel_h = cell * len(kills) + 150
+    positions = [(72, 156), (748, 156)]
+
+    lookup = {(row.feed, row.kill): row for row in study.rows}
+    active_spans = [row.active_span for row in study.rows]
+    edge_spans = [row.edge_span for row in study.rows]
+    active_vmin = min(active_spans) if active_spans else 0.0
+    active_vmax = max(active_spans) if active_spans else 1.0
+    edge_vmin = min(edge_spans) if edge_spans else 0.0
+    edge_vmax = max(edge_spans) if edge_spans else 1.0
+
+    biggest_active = max(study.rows, key=lambda row: row.active_span)
+    biggest_edge = max(study.rows, key=lambda row: row.edge_span)
+    robust_candidates = [row for row in study.rows if row.min_active_fraction > 0.05]
+    most_robust = min(robust_candidates, key=lambda row: (row.active_span + 30.0 * row.edge_span, -row.max_active_fraction)) if robust_candidates else min(study.rows, key=lambda row: (row.active_span + 30.0 * row.edge_span, -row.max_active_fraction))
+
+    def draw_heatmap(left: float, top: float, title: str, subtitle: str, *, getter, vmin: float, vmax: float) -> None:
+        parts.append(f'<rect x="{left}" y="{top}" width="{panel_w}" height="{panel_h}" class="panel"/>')
+        parts.append(svg_text(left + 24, top + 34, title, 'label'))
+        parts.append(svg_paragraph(left + 24, top + 58, [subtitle], 'small', line_height=18.0))
+        grid_left = left + 24
+        grid_top = top + 116
+
+        for column, feed in enumerate(feeds):
+            x = grid_left + column * cell
+            parts.append(svg_text(x + cell / 2, grid_top - 18, f'{feed:.3f}', 'small', 'middle'))
+        parts.append(svg_text(grid_left + cell * len(feeds) / 2, grid_top - 44, 'feed rate F', 'small', 'middle'))
+
+        for row_index, kill in enumerate(kills):
+            y = grid_top + row_index * cell
+            parts.append(svg_text(grid_left - 18, y + cell / 2 + 6, f'{kill:.3f}', 'small', 'end'))
+            for column, feed in enumerate(feeds):
+                x = grid_left + column * cell
+                row = lookup[(feed, kill)]
+                value = getter(row)
+                parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{cell - 6}" height="{cell - 6}" fill="{metric_color(value, vmin, vmax)}" rx="10"/>')
+                parts.append(f'<text x="{x + (cell - 6) / 2:.1f}" y="{y + cell / 2 - 2:.1f}" class="cell-label" text-anchor="middle" fill="{metric_label_color(value, vmin, vmax)}">{value:.3f}</text>')
+
+    draw_heatmap(
+        *positions[0],
+        'active-fraction span across seed profiles',
+        'Each cell shows max(active fraction) - min(active fraction) after swapping only the seed profile.',
+        getter=lambda row: row.active_span,
+        vmin=active_vmin,
+        vmax=active_vmax,
+    )
+    draw_heatmap(
+        *positions[1],
+        'edge-density span across seed profiles',
+        'The same bounded seed swap, now measured through interface sharpness instead of fill fraction.',
+        getter=lambda row: row.edge_span,
+        vmin=edge_vmin,
+        vmax=edge_vmax,
+    )
+
+    parts.append(svg_paragraph(72, 734, [
+        f'Largest active-profile swing: F={biggest_active.feed:.3f}, k={biggest_active.kill:.3f}, span={biggest_active.active_span:.3f} ({seed_profile_label(biggest_active.active_loser_profile)} → {seed_profile_label(biggest_active.active_winner_profile)}).',
+        f'Largest edge-profile swing: F={biggest_edge.feed:.3f}, k={biggest_edge.kill:.3f}, span={biggest_edge.edge_span:.4f}.',
+        f'Robust active counterexample: F={most_robust.feed:.3f}, k={most_robust.kill:.3f} stays active under every profile with only {most_robust.active_span:.3f} active span.',
+    ], 'small', line_height=22.0))
+    parts.append(svg_paragraph(72, 818, [
+        'This is the bounded caveat the repo needed: some chemistry cells survive profile swaps almost unchanged, while others flip from near-extinction to broad occupancy once the seeded patch is split or hollowed.',
+        'The three profiles were kept comparable but not identical on purpose.',
+        'This is a seed-geometry audit, not a claim that one universal initialization already exists.',
+    ], 'small', line_height=22.0))
+
+    panel_top = 924
+    panel_gap = 362
+    spotlight_panel_h = 322
+    thumb_pixel = 3.2
+    thumb_size = study.size * thumb_pixel
+    profile_panel_w = 414
+
+    for spotlight_index, spotlight in enumerate(study.spotlights):
+        top = panel_top + spotlight_index * panel_gap
+        parts.append(f'<rect x="72" y="{top}" width="1276" height="{spotlight_panel_h}" class="panel"/>')
+        parts.append(svg_text(96, top + 34, spotlight.title, 'label'))
+        parts.append(svg_paragraph(96, top + 60, [spotlight.reason], 'small', line_height=18.0))
+        for profile_index, profile_study in enumerate(spotlight.profiles):
+            left = 96 + profile_index * profile_panel_w
+            parts.append(f'<rect x="{left}" y="{top + 88}" width="376" height="212" fill="#111c30" stroke="#334155" stroke-width="1.5" rx="14"/>')
+            parts.append(svg_text(left + 18, top + 112, seed_profile_label(profile_study.profile), 'label'))
+            parts.append(svg_text(left + 18, top + 134, f'active={profile_study.metrics.active_fraction:.3f}, edge={profile_study.metrics.edge_density:.4f}', 'small'))
+            _draw_state_thumbnail(parts, state=profile_study.state, left=left + 18, top=top + 152, pixel=thumb_pixel)
+            text_left = left + 18 + thumb_size + 20
+            parts.append(svg_paragraph(text_left, top + 166, [
+                f'peak V: {profile_study.metrics.peak_v:.3f}',
+                f'mean V: {profile_study.metrics.mean_v:.3f}',
+                f'V std: {profile_study.metrics.std_v:.3f}',
+            ], 'small', line_height=22.0))
+
+    parts.append(svg_paragraph(72, 1780, [
+        'Read the heatmaps first, then the spotlight rows.',
+        'The top cells tell you where profile swaps matter most; the thumbnails show what those swings actually look like in the final V field instead of leaving the note at one scalar drift score.',
     ], 'small', line_height=22.0))
     parts.append('</svg>')
     return '\n'.join(parts) + '\n'

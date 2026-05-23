@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import random
 
 Grid = list[list[float]]
@@ -23,6 +24,7 @@ class GrayScottPreset:
     size: int = 72
     patch_radius: int = 7
     seed: int = 0
+    profile: str = 'center'
 
 
 @dataclass
@@ -39,22 +41,61 @@ def make_grid(size: int, value: float) -> Grid:
     return [[value for _ in range(size)] for _ in range(size)]
 
 
-def seed_state(size: int = 72, *, patch_radius: int = 7, seed: int = 0) -> GrayScottState:
+def seed_profile_label(profile: str) -> str:
+    labels = {
+        'center': 'centered square',
+        'double': 'split twin patches',
+        'ring': 'annulus shell',
+    }
+    if profile not in labels:
+        raise ValueError(f'unknown seed profile: {profile}')
+    return labels[profile]
+
+
+def _stamp_square(u: Grid, v: Grid, *, size: int, center_i: int, center_j: int, radius: int) -> None:
+    for i in range(center_i - radius, center_i + radius):
+        for j in range(center_j - radius, center_j + radius):
+            u[i % size][j % size] = 0.5
+            v[i % size][j % size] = 0.25
+
+
+def seed_state(size: int = 72, *, patch_radius: int = 7, seed: int = 0, profile: str = 'center') -> GrayScottState:
     u = make_grid(size, 1.0)
     v = make_grid(size, 0.0)
     center = size // 2
     rng = random.Random(seed)
 
-    for i in range(center - patch_radius, center + patch_radius):
-        for j in range(center - patch_radius, center + patch_radius):
-            u[i][j] = 0.5
-            v[i][j] = 0.25
+    noise_boxes: list[tuple[int, int, int]]
+    if profile == 'center':
+        _stamp_square(u, v, size=size, center_i=center, center_j=center, radius=patch_radius)
+        noise_boxes = [(center, center, patch_radius + 5)]
+    elif profile == 'double':
+        split_radius = max(1, round(patch_radius / math.sqrt(2.0)))
+        offset = patch_radius + split_radius + 1
+        _stamp_square(u, v, size=size, center_i=center, center_j=center - offset, radius=split_radius)
+        _stamp_square(u, v, size=size, center_i=center, center_j=center + offset, radius=split_radius)
+        noise_boxes = [
+            (center, center - offset, split_radius + 4),
+            (center, center + offset, split_radius + 4),
+        ]
+    elif profile == 'ring':
+        inner_radius = max(1, patch_radius - 2)
+        outer_radius = patch_radius + 1
+        for i in range(size):
+            for j in range(size):
+                distance = math.hypot(i - center, j - center)
+                if inner_radius <= distance <= outer_radius:
+                    u[i][j] = 0.5
+                    v[i][j] = 0.25
+        noise_boxes = [(center, center, outer_radius + 4)]
+    else:
+        raise ValueError(f'unknown seed profile: {profile}')
 
-    noise_radius = patch_radius + 5
-    for i in range(center - noise_radius, center + noise_radius):
-        for j in range(center - noise_radius, center + noise_radius):
-            u[i][j] = min(1.0, max(0.0, u[i][j] - 0.02 * (rng.random() - 0.5)))
-            v[i][j] = min(1.0, max(0.0, v[i][j] + 0.02 * (rng.random() - 0.5)))
+    for center_i, center_j, noise_radius in noise_boxes:
+        for i in range(center_i - noise_radius, center_i + noise_radius):
+            for j in range(center_j - noise_radius, center_j + noise_radius):
+                u[i % size][j % size] = min(1.0, max(0.0, u[i % size][j % size] - 0.02 * (rng.random() - 0.5)))
+                v[i % size][j % size] = min(1.0, max(0.0, v[i % size][j % size] + 0.02 * (rng.random() - 0.5)))
 
     return GrayScottState(u=u, v=v)
 
@@ -106,8 +147,9 @@ def simulate(
     steps: int = 1200,
     patch_radius: int = 7,
     seed: int = 0,
+    profile: str = 'center',
 ) -> GrayScottState:
-    state = seed_state(size=size, patch_radius=patch_radius, seed=seed)
+    state = seed_state(size=size, patch_radius=patch_radius, seed=seed, profile=profile)
     for _ in range(steps):
         state = step(state, params)
     return state
@@ -120,11 +162,12 @@ def simulate_samples(
     size: int = 72,
     patch_radius: int = 7,
     seed: int = 0,
+    profile: str = 'center',
 ) -> list[tuple[int, GrayScottState]]:
     if any(step_count < 0 for step_count in sample_steps):
         raise ValueError('sample steps must be non-negative')
     ordered_steps = tuple(sorted(set(sample_steps)))
-    state = seed_state(size=size, patch_radius=patch_radius, seed=seed)
+    state = seed_state(size=size, patch_radius=patch_radius, seed=seed, profile=profile)
     if not ordered_steps:
         return []
 
@@ -148,6 +191,7 @@ def simulate_preset(preset: GrayScottPreset) -> GrayScottState:
         steps=preset.steps,
         patch_radius=preset.patch_radius,
         seed=preset.seed,
+        profile=preset.profile,
     )
 
 
@@ -158,6 +202,7 @@ def simulate_preset_samples(preset: GrayScottPreset, sample_steps: tuple[int, ..
         size=preset.size,
         patch_radius=preset.patch_radius,
         seed=preset.seed,
+        profile=preset.profile,
     )
 
 

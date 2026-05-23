@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from gray_scott_lab.analysis import TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, scaled_patch_radius, study_grid_size_comparison, study_horizon_comparison, study_time_evolution
+from gray_scott_lab.analysis import TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, scaled_patch_radius, study_grid_size_comparison, study_horizon_comparison, study_initialization_sensitivity, study_time_evolution
 from gray_scott_lab.core import GrayScottParameters, seed_state, simulate, simulate_samples
 
 
@@ -11,6 +11,12 @@ class GrayScottTests(unittest.TestCase):
         state = seed_state(size=24, patch_radius=4, seed=3)
         values = [value for row in state.u for value in row] + [value for row in state.v for value in row]
         self.assertTrue(all(0.0 <= value <= 1.0 for value in values))
+
+    def test_all_seed_profiles_start_in_bounds(self) -> None:
+        for profile in ('center', 'double', 'ring'):
+            state = seed_state(size=24, patch_radius=4, seed=3, profile=profile)
+            values = [value for row in state.u for value in row] + [value for row in state.v for value in row]
+            self.assertTrue(all(0.0 <= value <= 1.0 for value in values))
 
     def test_simulation_is_deterministic_for_same_seed(self) -> None:
         params = GrayScottParameters(feed=0.022, kill=0.051)
@@ -74,6 +80,23 @@ class GrayScottTests(unittest.TestCase):
     def test_grid_size_comparison_requires_larger_second_grid(self) -> None:
         with self.assertRaises(ValueError):
             study_grid_size_comparison(steps=900, small_size=40, large_size=40)
+
+    def test_initialization_sensitivity_detects_strong_and_robust_cells(self) -> None:
+        study = study_initialization_sensitivity(
+            (0.022, 0.026, 0.030),
+            (0.054, 0.057, 0.063),
+            steps=900,
+            size=24,
+            patch_radius=3,
+        )
+        strongest = max(study.rows, key=lambda row: row.active_span)
+        robust_active = min((row for row in study.rows if row.min_active_fraction > 0.05), key=lambda row: row.active_span + 30.0 * row.edge_span)
+        self.assertGreater(strongest.active_span, 0.45)
+        self.assertLess(robust_active.active_span, 0.06)
+
+    def test_initialization_sensitivity_requires_multiple_profiles(self) -> None:
+        with self.assertRaises(ValueError):
+            study_initialization_sensitivity(profiles=('center',))
 
 
 if __name__ == '__main__':

@@ -95,6 +95,78 @@ class GridSizeComparisonStudy:
     rows: tuple[GridSizeComparisonRow, ...]
 
 
+@dataclass(frozen=True)
+class SeedProfileMetrics:
+    profile: str
+    metrics: PatternMetrics
+
+
+@dataclass(frozen=True)
+class InitializationSensitivityRow:
+    feed: float
+    kill: float
+    profile_metrics: tuple[SeedProfileMetrics, ...]
+
+    def metrics_for(self, profile: str) -> PatternMetrics:
+        for entry in self.profile_metrics:
+            if entry.profile == profile:
+                return entry.metrics
+        raise KeyError(profile)
+
+    @property
+    def active_span(self) -> float:
+        values = [entry.metrics.active_fraction for entry in self.profile_metrics]
+        return max(values) - min(values)
+
+    @property
+    def edge_span(self) -> float:
+        values = [entry.metrics.edge_density for entry in self.profile_metrics]
+        return max(values) - min(values)
+
+    @property
+    def max_active_fraction(self) -> float:
+        return max(entry.metrics.active_fraction for entry in self.profile_metrics)
+
+    @property
+    def min_active_fraction(self) -> float:
+        return min(entry.metrics.active_fraction for entry in self.profile_metrics)
+
+    @property
+    def active_winner_profile(self) -> str:
+        return max(self.profile_metrics, key=lambda entry: entry.metrics.active_fraction).profile
+
+    @property
+    def active_loser_profile(self) -> str:
+        return min(self.profile_metrics, key=lambda entry: entry.metrics.active_fraction).profile
+
+
+@dataclass(frozen=True)
+class InitializationSensitivitySpotlightProfile:
+    profile: str
+    metrics: PatternMetrics
+    state: GrayScottState
+
+
+@dataclass(frozen=True)
+class InitializationSensitivitySpotlight:
+    title: str
+    reason: str
+    feed: float
+    kill: float
+    profiles: tuple[InitializationSensitivitySpotlightProfile, ...]
+
+
+@dataclass(frozen=True)
+class InitializationSensitivityStudy:
+    steps: int
+    size: int
+    patch_radius: int
+    seed: int
+    profiles: tuple[str, ...]
+    rows: tuple[InitializationSensitivityRow, ...]
+    spotlights: tuple[InitializationSensitivitySpotlight, ...]
+
+
 CURATED_PRESETS: tuple[GrayScottPreset, ...] = (
     GrayScottPreset(name='sparse spots', feed=0.014, kill=0.054, steps=1800, size=72, patch_radius=7, seed=0),
     GrayScottPreset(name='worm bands', feed=0.022, kill=0.051, steps=1600, size=72, patch_radius=7, seed=0),
@@ -107,6 +179,7 @@ SCAN_KILLS: tuple[float, ...] = (0.051, 0.054, 0.057, 0.060, 0.063)
 TIME_EVOLUTION_PRESET = CURATED_PRESETS[1]
 DEFAULT_SNAPSHOT_STEPS: tuple[int, ...] = (0, 60, 180, 360, 800, 1600)
 DEFAULT_TIMELINE_STEP = 40
+INITIALIZATION_PROFILES: tuple[str, ...] = ('center', 'double', 'ring')
 
 
 def scaled_patch_radius(size: int, *, reference_size: int = 40, reference_patch_radius: int = 5) -> int:
@@ -335,4 +408,119 @@ def study_grid_size_comparison(
         large_patch_radius=resolved_large_patch_radius,
         seed=seed,
         rows=rows,
+    )
+
+
+def study_initialization_sensitivity(
+    feeds: tuple[float, ...] = SCAN_FEEDS,
+    kills: tuple[float, ...] = SCAN_KILLS,
+    *,
+    steps: int = 1400,
+    size: int = 40,
+    patch_radius: int = 5,
+    seed: int = 0,
+    profiles: tuple[str, ...] = INITIALIZATION_PROFILES,
+) -> InitializationSensitivityStudy:
+    if steps < 0:
+        raise ValueError('steps must be non-negative')
+    if size <= 0:
+        raise ValueError('size must be positive')
+    if patch_radius <= 0:
+        raise ValueError('patch_radius must be positive')
+    if len(profiles) < 2:
+        raise ValueError('need at least two profiles')
+
+    rows: list[InitializationSensitivityRow] = []
+    for kill in kills:
+        for feed in feeds:
+            metrics = tuple(
+                SeedProfileMetrics(
+                    profile=profile,
+                    metrics=measure_pattern(
+                        simulate(
+                            GrayScottParameters(feed=feed, kill=kill),
+                            size=size,
+                            steps=steps,
+                            patch_radius=patch_radius,
+                            seed=seed,
+                            profile=profile,
+                        )
+                    ),
+                )
+                for profile in profiles
+            )
+            rows.append(InitializationSensitivityRow(feed=feed, kill=kill, profile_metrics=metrics))
+
+    if not rows:
+        return InitializationSensitivityStudy(
+            steps=steps,
+            size=size,
+            patch_radius=patch_radius,
+            seed=seed,
+            profiles=profiles,
+            rows=tuple(),
+            spotlights=tuple(),
+        )
+
+    strongest_flip = max(rows, key=lambda row: (row.active_span, row.edge_span, row.max_active_fraction))
+    robust_candidates = [row for row in rows if row.min_active_fraction > 0.05]
+    if robust_candidates:
+        most_robust = min(robust_candidates, key=lambda row: (row.active_span + 30.0 * row.edge_span, -row.max_active_fraction))
+    else:
+        most_robust = min(rows, key=lambda row: (row.active_span + 30.0 * row.edge_span, -row.max_active_fraction))
+
+    def make_spotlight(row: InitializationSensitivityRow, *, title: str, reason: str) -> InitializationSensitivitySpotlight:
+        profiles_with_state = tuple(
+            InitializationSensitivitySpotlightProfile(
+                profile=profile,
+                metrics=row.metrics_for(profile),
+                state=simulate(
+                    GrayScottParameters(feed=row.feed, kill=row.kill),
+                    size=size,
+                    steps=steps,
+                    patch_radius=patch_radius,
+                    seed=seed,
+                    profile=profile,
+                ),
+            )
+            for profile in profiles
+        )
+        return InitializationSensitivitySpotlight(
+            title=title,
+            reason=reason,
+            feed=row.feed,
+            kill=row.kill,
+            profiles=profiles_with_state,
+        )
+
+    spotlights = [
+        make_spotlight(
+            strongest_flip,
+            title='Most profile-sensitive cell',
+            reason=(
+                f'F={strongest_flip.feed:.3f}, k={strongest_flip.kill:.3f} has the widest active-fraction span '
+                f'({strongest_flip.active_span:.3f}) across the three bounded seed profiles.'
+            ),
+        )
+    ]
+    if most_robust != strongest_flip:
+        spotlights.append(
+            make_spotlight(
+                most_robust,
+                title='Robust active cell',
+                reason=(
+                    f'F={most_robust.feed:.3f}, k={most_robust.kill:.3f} stays chemically active under every profile '
+                    f'while keeping one of the smallest combined active/edge drifts.'
+                ),
+            )
+        )
+
+    return InitializationSensitivityStudy(
+        steps=steps,
+        size=size,
+        patch_radius=patch_radius,
+        seed=seed,
+        profiles=profiles,
+        rows=tuple(rows),
+        spotlights=tuple(spotlights),
     )

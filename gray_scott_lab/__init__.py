@@ -1,9 +1,12 @@
 from .analysis import (
     CURATED_PRESETS,
+    INITIALIZATION_PROFILES,
     SCAN_FEEDS,
     SCAN_KILLS,
     GridSizeComparisonRow,
     GridSizeComparisonStudy,
+    InitializationSensitivityRow,
+    InitializationSensitivityStudy,
     ParameterScanRow,
     PatternMetrics,
     PresetStudy,
@@ -11,14 +14,18 @@ from .analysis import (
     scan_parameter_grid,
     scaled_patch_radius,
     study_grid_size_comparison,
+    study_initialization_sensitivity,
     study_presets,
 )
-from .core import GrayScottParameters, GrayScottPreset, GrayScottState, seed_state, simulate, simulate_preset, step
+from .core import GrayScottParameters, GrayScottPreset, GrayScottState, seed_profile_label, seed_state, simulate, simulate_preset, step
 
 __all__ = [
     'CURATED_PRESETS',
     'GridSizeComparisonRow',
     'GridSizeComparisonStudy',
+    'INITIALIZATION_PROFILES',
+    'InitializationSensitivityRow',
+    'InitializationSensitivityStudy',
     'GrayScottParameters',
     'GrayScottPreset',
     'GrayScottState',
@@ -30,10 +37,12 @@ __all__ = [
     'measure_pattern',
     'scan_parameter_grid',
     'scaled_patch_radius',
+    'seed_profile_label',
     'seed_state',
     'simulate',
     'simulate_preset',
     'step',
     'study_grid_size_comparison',
+    'study_initialization_sensitivity',
     'study_presets',
 ]
