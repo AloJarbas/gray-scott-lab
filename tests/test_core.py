@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from gray_scott_lab.analysis import TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, scaled_patch_radius, study_grid_size_comparison, study_horizon_comparison, study_initialization_sensitivity, study_time_evolution
+from gray_scott_lab.analysis import HORIZON_TAG_FADING, HORIZON_TAG_GROWING, HORIZON_TAG_REVERSING, HORIZON_TAG_SETTLED, TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, scaled_patch_radius, study_grid_size_comparison, study_horizon_comparison, study_horizon_tags, study_initialization_sensitivity, study_time_evolution
 from gray_scott_lab.core import GrayScottParameters, seed_state, simulate, simulate_samples
 
 
@@ -97,6 +97,27 @@ class GrayScottTests(unittest.TestCase):
     def test_initialization_sensitivity_requires_multiple_profiles(self) -> None:
         with self.assertRaises(ValueError):
             study_initialization_sensitivity(profiles=('center',))
+
+    def test_horizon_tags_split_settled_growing_fading_and_reversing_cells(self) -> None:
+        study = study_horizon_tags(
+            (0.022, 0.026, 0.030),
+            (0.051, 0.054, 0.057, 0.060, 0.063),
+            early_steps=700,
+            middle_steps=1400,
+            late_steps=2800,
+            size=40,
+            patch_radius=5,
+            seed=0,
+        )
+        by_cell = {(row.feed, row.kill): row.tag for row in study.rows}
+        self.assertEqual(by_cell[(0.030, 0.063)], HORIZON_TAG_GROWING)
+        self.assertEqual(by_cell[(0.026, 0.051)], HORIZON_TAG_FADING)
+        self.assertEqual(by_cell[(0.022, 0.051)], HORIZON_TAG_REVERSING)
+        self.assertEqual(by_cell[(0.030, 0.060)], HORIZON_TAG_SETTLED)
+
+    def test_horizon_tags_require_strictly_increasing_steps(self) -> None:
+        with self.assertRaises(ValueError):
+            study_horizon_tags(early_steps=700, middle_steps=700, late_steps=1400)
 
 
 if __name__ == '__main__':

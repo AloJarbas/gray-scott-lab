@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from collections import Counter
 from html import escape
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 
-from .analysis import GridSizeComparisonStudy, HorizonComparisonStudy, InitializationSensitivityStudy, ParameterScanRow, PresetStudy, TimeEvolutionStudy
+from .analysis import GridSizeComparisonStudy, HorizonComparisonStudy, HorizonTagStudy, HORIZON_TAG_FADING, HORIZON_TAG_GROWING, HORIZON_TAG_REVERSING, HORIZON_TAG_SETTLED, InitializationSensitivityStudy, ParameterScanRow, PresetStudy, TimeEvolutionStudy
 from .core import GrayScottState, seed_profile_label
 
 
@@ -81,6 +82,36 @@ def delta_label_color(value: float, scale: float) -> str:
     if scale <= 0.0:
         return '#e2e8f0'
     return '#0f172a' if abs(value) / scale < 0.24 else '#f8fafc'
+
+
+def horizon_tag_color(tag: str) -> str:
+    mapping = {
+        HORIZON_TAG_SETTLED: '#16a34a',
+        HORIZON_TAG_GROWING: '#0ea5e9',
+        HORIZON_TAG_FADING: '#f97316',
+        HORIZON_TAG_REVERSING: '#a855f7',
+    }
+    return mapping[tag]
+
+
+def horizon_tag_short_label(tag: str) -> str:
+    mapping = {
+        HORIZON_TAG_SETTLED: 'SET',
+        HORIZON_TAG_GROWING: 'UP',
+        HORIZON_TAG_FADING: 'DOWN',
+        HORIZON_TAG_REVERSING: 'FLIP',
+    }
+    return mapping[tag]
+
+
+def horizon_tag_long_label(tag: str) -> str:
+    mapping = {
+        HORIZON_TAG_SETTLED: 'settled',
+        HORIZON_TAG_GROWING: 'late-growing',
+        HORIZON_TAG_FADING: 'late-fading',
+        HORIZON_TAG_REVERSING: 'reversing',
+    }
+    return mapping[tag]
 
 
 def base_svg(width: int, height: int, title: str, subtitle: str) -> list[str]:
@@ -539,6 +570,138 @@ def _draw_state_thumbnail(parts: list[str], *, state: GrayScottState, left: floa
             parts.append(
                 f'<rect x="{left + col_index * pixel:.1f}" y="{top + row_index * pixel:.1f}" width="{pixel + 0.15:.1f}" height="{pixel + 0.15:.1f}" fill="{pattern_color(value)}"/>'
             )
+
+
+def render_horizon_tags(study: HorizonTagStudy, feeds: tuple[float, ...], kills: tuple[float, ...]) -> str:
+    width, height = 1440, 1995
+    parts = base_svg(
+        width,
+        height,
+        'Gray-Scott horizon drift tags',
+        f'The same feed-vs-kill grid at {study.early_steps}, {study.middle_steps}, and {study.late_steps} steps. A bounded tag pass for which cells settled, grew, faded, or reversed.',
+    )
+
+    cell = 82
+    panel_w = cell * len(feeds) + 140
+    panel_h = cell * len(kills) + 150
+    left_panel = (72, 156)
+    right_panel = (748, 156)
+    lookup = {(row.feed, row.kill): row for row in study.rows}
+    late_active = [row.late_active_delta for row in study.rows]
+    late_scale = max(abs(value) for value in late_active) if late_active else 1.0
+    counts = Counter(row.tag for row in study.rows)
+
+    def draw_tag_map(left: float, top: float) -> None:
+        parts.append(f'<rect x="{left}" y="{top}" width="{panel_w}" height="{panel_h}" class="panel"/>')
+        parts.append(svg_text(left + 24, top + 34, 'bounded horizon tag map', 'label'))
+        parts.append(svg_paragraph(left + 24, top + 58, [
+            'Each cell reads the three-horizon active-fraction path only.',
+            'Descriptive tags: settled, late-growing, late-fading, or reversing.',
+        ], 'small', line_height=18.0))
+        grid_left = left + 24
+        grid_top = top + 116
+
+        for column, feed in enumerate(feeds):
+            x = grid_left + column * cell
+            parts.append(svg_text(x + cell / 2, grid_top - 18, f'{feed:.3f}', 'small', 'middle'))
+        parts.append(svg_text(grid_left + cell * len(feeds) / 2, grid_top - 44, 'feed rate F', 'small', 'middle'))
+
+        for row_index, kill in enumerate(kills):
+            y = grid_top + row_index * cell
+            parts.append(svg_text(grid_left - 18, y + cell / 2 + 6, f'{kill:.3f}', 'small', 'end'))
+            for column, feed in enumerate(feeds):
+                x = grid_left + column * cell
+                entry = lookup[(feed, kill)]
+                tag = entry.tag
+                parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{cell - 6}" height="{cell - 6}" fill="{horizon_tag_color(tag)}" rx="10"/>')
+                parts.append(f'<text x="{x + (cell - 6) / 2:.1f}" y="{y + cell / 2 - 4:.1f}" class="cell-label" text-anchor="middle" fill="#f8fafc">{horizon_tag_short_label(tag)}</text>')
+                parts.append(svg_text(x + (cell - 6) / 2, y + cell / 2 + 16, f'{entry.total_active_delta:+.2f}', 'small', 'middle'))
+
+        legend_left = left + 24
+        legend_top = top + panel_h - 30
+        legend_items = [
+            (HORIZON_TAG_SETTLED, f'{counts.get(HORIZON_TAG_SETTLED, 0)} settled'),
+            (HORIZON_TAG_GROWING, f'{counts.get(HORIZON_TAG_GROWING, 0)} late-growing'),
+            (HORIZON_TAG_FADING, f'{counts.get(HORIZON_TAG_FADING, 0)} late-fading'),
+            (HORIZON_TAG_REVERSING, f'{counts.get(HORIZON_TAG_REVERSING, 0)} reversing'),
+        ]
+        for index, (tag, text) in enumerate(legend_items):
+            x = legend_left + index * 150
+            parts.append(f'<rect x="{x:.1f}" y="{legend_top - 14:.1f}" width="18" height="18" fill="{horizon_tag_color(tag)}" rx="5"/>')
+            parts.append(svg_text(x + 26, legend_top, text, 'small'))
+
+    def draw_late_delta(left: float, top: float) -> None:
+        parts.append(f'<rect x="{left}" y="{top}" width="{panel_w}" height="{panel_h}" class="panel"/>')
+        parts.append(svg_text(left + 24, top + 34, f'late active change ({study.late_steps} - {study.middle_steps})', 'label'))
+        parts.append(svg_paragraph(left + 24, top + 58, [
+            'This isolates the second leg only.',
+            'Positive means late fill-in. Negative means the middle horizon overread the cell.',
+        ], 'small', line_height=18.0))
+        grid_left = left + 24
+        grid_top = top + 116
+
+        for column, feed in enumerate(feeds):
+            x = grid_left + column * cell
+            parts.append(svg_text(x + cell / 2, grid_top - 18, f'{feed:.3f}', 'small', 'middle'))
+        parts.append(svg_text(grid_left + cell * len(feeds) / 2, grid_top - 44, 'feed rate F', 'small', 'middle'))
+
+        for row_index, kill in enumerate(kills):
+            y = grid_top + row_index * cell
+            parts.append(svg_text(grid_left - 18, y + cell / 2 + 6, f'{kill:.3f}', 'small', 'end'))
+            for column, feed in enumerate(feeds):
+                x = grid_left + column * cell
+                entry = lookup[(feed, kill)]
+                value = entry.late_active_delta
+                parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{cell - 6}" height="{cell - 6}" fill="{delta_color(value, late_scale)}" rx="10"/>')
+                parts.append(f'<text x="{x + (cell - 6) / 2:.1f}" y="{y + cell / 2 - 2:.1f}" class="cell-label" text-anchor="middle" fill="{delta_label_color(value, late_scale)}">{value:+.3f}</text>')
+
+        biggest_late_growth = max(study.rows, key=lambda row: row.late_active_delta)
+        biggest_late_fade = min(study.rows, key=lambda row: row.late_active_delta)
+        parts.append(svg_paragraph(left + 24, top + panel_h - 30, [
+            f'Biggest late growth: F={biggest_late_growth.feed:.3f}, k={biggest_late_growth.kill:.3f}, Δactive={biggest_late_growth.late_active_delta:+.3f}.',
+            f'Biggest late fade: F={biggest_late_fade.feed:.3f}, k={biggest_late_fade.kill:.3f}, Δactive={biggest_late_fade.late_active_delta:+.3f}.',
+        ], 'small', line_height=18.0))
+
+    draw_tag_map(*left_panel)
+    draw_late_delta(*right_panel)
+
+    parts.append(svg_paragraph(72, 780, [
+        'Read the left panel as the bounded classifier and the right panel as the raw second-leg drift.',
+        'Together they show that the unsettled cells do not all fail the same way: some keep growing, some fade out, and a smaller set overshoot and then reverse.',
+    ], 'small', line_height=22.0))
+
+    spotlight_top = 874
+    panel_height = 238
+    panel_gap = 18
+    thumb_pixel = 2.7
+    thumb_size = study.size * thumb_pixel
+    subpanel_width = 392
+
+    for index, spotlight in enumerate(study.spotlights):
+        top = spotlight_top + index * (panel_height + panel_gap)
+        parts.append(f'<rect x="72" y="{top}" width="1296" height="{panel_height}" class="panel"/>')
+        parts.append(svg_text(96, top + 32, spotlight.title, 'label'))
+        parts.append(svg_paragraph(96, top + 56, [spotlight.reason], 'small', line_height=18.0))
+        for frame_index, frame in enumerate(spotlight.frames):
+            left = 96 + frame_index * subpanel_width
+            box_top = top + 86
+            parts.append(f'<rect x="{left}" y="{box_top}" width="364" height="128" fill="#111c30" stroke="#334155" stroke-width="1.5" rx="14"/>')
+            parts.append(svg_text(left + 16, box_top + 24, f'{frame.step} steps', 'label'))
+            parts.append(svg_text(left + 16, box_top + 46, f'active={frame.metrics.active_fraction:.3f}, edge={frame.metrics.edge_density:.4f}, peak={frame.metrics.peak_v:.3f}', 'small'))
+            _draw_state_thumbnail(parts, state=frame.state, left=left + 16, top=box_top + 58, pixel=thumb_pixel)
+            text_left = left + 16 + thumb_size + 18
+            parts.append(svg_paragraph(text_left, box_top + 76, [
+                f'mean V: {frame.metrics.mean_v:.3f}',
+                f'V std: {frame.metrics.std_v:.3f}',
+                f'tag lane: {horizon_tag_long_label(spotlight.tag)}',
+            ], 'small', line_height=18.0))
+
+    parts.append(svg_paragraph(72, 1946, [
+        'This is still a bounded read built from one lattice, one seed, and one active-fraction rule.',
+        'That is enough to sharpen the repo’s caveat story without pretending the whole Gray-Scott plane has been universally classified.',
+    ], 'small', line_height=22.0))
+    parts.append('</svg>')
+    return '\n'.join(parts) + '\n'
 
 
 def render_initialization_sensitivity(study: InitializationSensitivityStudy, feeds: tuple[float, ...], kills: tuple[float, ...]) -> str:

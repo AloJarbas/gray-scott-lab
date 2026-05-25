@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import csv
 import json
 from pathlib import Path
@@ -9,9 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gray_scott_lab.analysis import CURATED_PRESETS, INITIALIZATION_PROFILES, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_initialization_sensitivity, study_presets, study_time_evolution
+from gray_scott_lab.analysis import CURATED_PRESETS, HORIZON_TAG_FADING, HORIZON_TAG_GROWING, HORIZON_TAG_REVERSING, HORIZON_TAG_SETTLED, INITIALIZATION_PROFILES, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_horizon_tags, study_initialization_sensitivity, study_presets, study_time_evolution
 from gray_scott_lab.core import seed_profile_label
-from gray_scott_lab.render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_initialization_sensitivity, render_metric_map, render_pattern_atlas, render_time_evolution
+from gray_scott_lab.render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_horizon_tags, render_initialization_sensitivity, render_metric_map, render_pattern_atlas, render_time_evolution
 ART = ROOT / 'art'
 REPORTS = ROOT / 'reports'
 NOTEBOOKS = ROOT / 'notebooks'
@@ -606,6 +607,204 @@ def write_grid_size_comparison() -> tuple[Path, Path, Path, Path]:
     return svg_path, csv_path, report_path, notebook_path
 
 
+def write_horizon_tags() -> tuple[Path, Path, Path, Path]:
+    ART.mkdir(parents=True, exist_ok=True)
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    NOTEBOOKS.mkdir(parents=True, exist_ok=True)
+
+    study = study_horizon_tags(
+        SCAN_FEEDS,
+        SCAN_KILLS,
+        early_steps=700,
+        middle_steps=1400,
+        late_steps=2800,
+        size=40,
+        patch_radius=5,
+        seed=0,
+    )
+    svg_path = ART / 'gray-scott-horizon-tags.svg'
+    png_path = ART / 'gray-scott-horizon-tags.png'
+    csv_path = ART / 'gray-scott-horizon-tags.csv'
+    report_path = REPORTS / 'horizon-tags-sidecar.md'
+    notebook_path = NOTEBOOKS / 'gray_scott_horizon_tags.ipynb'
+
+    svg_path.write_text(render_horizon_tags(study, SCAN_FEEDS, SCAN_KILLS))
+    export_png_from_svg(svg_path, png_path, size=2200, dpi=300)
+
+    with csv_path.open('w', newline='') as handle:
+        writer = csv.writer(handle)
+        writer.writerow([
+            'feed',
+            'kill',
+            'early_steps',
+            'middle_steps',
+            'late_steps',
+            'tag',
+            'early_active_fraction',
+            'middle_active_fraction',
+            'late_active_fraction',
+            'early_active_delta',
+            'late_active_delta',
+            'total_active_delta',
+            'early_edge_density',
+            'middle_edge_density',
+            'late_edge_density',
+            'early_edge_delta',
+            'late_edge_delta',
+            'total_edge_delta',
+        ])
+        for row in study.rows:
+            writer.writerow([
+                row.feed,
+                row.kill,
+                study.early_steps,
+                study.middle_steps,
+                study.late_steps,
+                row.tag,
+                row.early_metrics.active_fraction,
+                row.middle_metrics.active_fraction,
+                row.late_metrics.active_fraction,
+                row.early_active_delta,
+                row.late_active_delta,
+                row.total_active_delta,
+                row.early_metrics.edge_density,
+                row.middle_metrics.edge_density,
+                row.late_metrics.edge_density,
+                row.early_edge_delta,
+                row.late_edge_delta,
+                row.total_edge_delta,
+            ])
+
+    counts = Counter(row.tag for row in study.rows)
+    settled_active = next(spotlight for spotlight in study.spotlights if spotlight.tag == HORIZON_TAG_SETTLED)
+    late_growing = next((spotlight for spotlight in study.spotlights if spotlight.tag == HORIZON_TAG_GROWING), None)
+    late_fading = next((spotlight for spotlight in study.spotlights if spotlight.tag == HORIZON_TAG_FADING), None)
+    reversing = next((spotlight for spotlight in study.spotlights if spotlight.tag == HORIZON_TAG_REVERSING), None)
+    strongest_late_growth = max(study.rows, key=lambda row: row.late_active_delta)
+    strongest_late_fade = min(study.rows, key=lambda row: row.late_active_delta)
+
+    lines = [
+        '# Gray-Scott horizon tags sidecar',
+        '',
+        'The horizon, grid-size, and seed-profile passes all made the coarse scan more honest, but they still left one practical question open: **when a cell is not settled yet, what kind of late-horizon failure is it actually showing?**',
+        '',
+        f'This sidecar keeps the same feed/kill grid, seed, and `{study.size}×{study.size}` lattice, then measures the same cells at `{study.early_steps}`, `{study.middle_steps}`, and `{study.late_steps}` steps.',
+        '',
+        'The tag rule is intentionally bounded. It only reads the active-fraction path across those three horizons, then keeps edge density nearby as context. The tags are descriptive, not universal:',
+        '',
+        '- `settled`: both horizon legs stay small enough that the cell is basically stable already',
+        '- `growing`: the late horizon still ends materially busier than the early one',
+        '- `fading`: the late horizon collapses materially below the early one',
+        '- `reversing`: the cell changes direction between the two horizon legs instead of just drifting one way',
+        '',
+        '## What the tag map says',
+        '',
+        f'- settled cells: `{counts.get(HORIZON_TAG_SETTLED, 0)}`',
+        f'- late-growing cells: `{counts.get(HORIZON_TAG_GROWING, 0)}`',
+        f'- late-fading cells: `{counts.get(HORIZON_TAG_FADING, 0)}`',
+        f'- reversing cells: `{counts.get(HORIZON_TAG_REVERSING, 0)}`',
+        f'- biggest late growth: `F = {strongest_late_growth.feed:.3f}`, `k = {strongest_late_growth.kill:.3f}` with `Δactive_{{late}} = {strongest_late_growth.late_active_delta:+.3f}`',
+        f'- biggest late fade: `F = {strongest_late_fade.feed:.3f}`, `k = {strongest_late_fade.kill:.3f}` with `Δactive_{{late}} = {strongest_late_fade.late_active_delta:+.3f}`',
+        '',
+        '## The useful read',
+        '',
+        f'- settled active counterexample: `F = {settled_active.feed:.3f}`, `k = {settled_active.kill:.3f}` stays visibly active without large horizon drift',
+        f'- strongest late-growing example: `F = {late_growing.feed:.3f}`, `k = {late_growing.kill:.3f}`' if late_growing is not None else '- no late-growing cell cleared the bounded threshold on this grid',
+        f'- strongest late-fading example: `F = {late_fading.feed:.3f}`, `k = {late_fading.kill:.3f}`' if late_fading is not None else '- no late-fading cell cleared the bounded threshold on this grid',
+        f'- reversing example: `F = {reversing.feed:.3f}`, `k = {reversing.kill:.3f}` changes direction between horizon legs' if reversing is not None else '- no reversing cell cleared the bounded threshold on this grid',
+        '- that means the unsettled part of the map is not one generic caution blob after all. Some cells keep filling in, some were overread and later die back, and a smaller group overshoots before turning around.',
+        '',
+        '## Caveat',
+        '',
+        'This is still one lattice, one deterministic seed, and one active-fraction-driven tag rule. It sharpens the repo’s caveat story; it does not claim to classify the whole Gray-Scott plane once and for all.',
+        '',
+        'Open `art/gray-scott-horizon-tags.png`, `art/gray-scott-horizon-tags.csv`, and `notebooks/gray_scott_horizon_tags.ipynb` together next.',
+    ]
+    report_path.write_text('\n'.join(lines) + '\n')
+
+    notebook = {
+        'cells': [
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '# Gray-Scott horizon tags\n',
+                    '\n',
+                    'This notebook is the slower companion to `reports/horizon-tags-sidecar.md`.\n',
+                    '\n',
+                    'The bounded question is the practical one: **after the earlier caveat passes, which cells are already settled, which are still growing, which fade out late, and which actually reverse?**\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 1. Hold the chemistry fixed and read three horizons instead of two\n',
+                    '\n',
+                    'The Gray-Scott update stays the same. This sidecar only adds one later checkpoint and then reads the active-fraction path across the three horizons.\n',
+                ],
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'from gray_scott_lab.analysis import SCAN_FEEDS, SCAN_KILLS, study_horizon_tags\n',
+                    '\n',
+                    'study = study_horizon_tags(SCAN_FEEDS, SCAN_KILLS, early_steps=700, middle_steps=1400, late_steps=2800)\n',
+                    '[(row.feed, row.kill, row.tag, round(row.early_active_delta, 3), round(row.late_active_delta, 3), round(row.total_active_delta, 3)) for row in study.rows]\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 2. The new figure\n',
+                    '\n',
+                    '![Gray-Scott horizon tags](../art/gray-scott-horizon-tags.png)\n',
+                    '\n',
+                    'Read it in two passes:\n',
+                    '\n',
+                    '1. the left panel is the bounded tag map built from the active-fraction path\n',
+                    '2. the right panel shows the raw late-horizon active drift so the tag map never floats free of the numbers\n',
+                    '3. the spotlight rows show what one settled, growing, fading, and reversing cell actually look like in the `V` field\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## 3. What this settles and what it does not\n',
+                    '\n',
+                    'The useful lesson is that the unstable cells are **not all unstable in the same direction**. Some keep filling in, some die back after looking active in the middle horizon, and a smaller set overshoot and reverse.\n',
+                    '\n',
+                    'That makes the earlier Gray-Scott caveat packet more specific instead of just longer.\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## Problems worth trying next\n',
+                    '\n',
+                    '1. Repeat the same three-horizon tag rule on one larger lattice only if the tag counts actually change.\n',
+                    '2. Stress the tag rule against the split and ring seed profiles only if the reversing lane survives that swap.\n',
+                    '3. Extend the chemistry lane with one second reaction-diffusion model only if it reveals a genuinely different late-horizon failure pattern.\n',
+                ],
+            },
+        ],
+        'metadata': {
+            'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
+            'language_info': {'name': 'python', 'version': '3.11'},
+        },
+        'nbformat': 4,
+        'nbformat_minor': 5,
+    }
+    notebook_path.write_text(json.dumps(notebook, indent=2) + '\n')
+    return svg_path, csv_path, report_path, notebook_path
+
+
 def write_initialization_sensitivity() -> tuple[Path, Path, Path, Path]:
     ART.mkdir(parents=True, exist_ok=True)
     REPORTS.mkdir(parents=True, exist_ok=True)
@@ -803,6 +1002,7 @@ def main() -> None:
     timeline_path, timeline_csv_path, timeline_report_path, timeline_notebook_path = write_time_evolution()
     horizon_path, horizon_csv_path, horizon_report_path, horizon_notebook_path = write_horizon_comparison()
     grid_size_path, grid_size_csv_path, grid_size_report_path, grid_size_notebook_path = write_grid_size_comparison()
+    horizon_tags_path, horizon_tags_csv_path, horizon_tags_report_path, horizon_tags_notebook_path = write_horizon_tags()
     init_path, init_csv_path, init_report_path, init_notebook_path = write_initialization_sensitivity()
     print(atlas_path)
     print(map_path)
@@ -820,6 +1020,10 @@ def main() -> None:
     print(grid_size_csv_path)
     print(grid_size_report_path)
     print(grid_size_notebook_path)
+    print(horizon_tags_path)
+    print(horizon_tags_csv_path)
+    print(horizon_tags_report_path)
+    print(horizon_tags_notebook_path)
     print(init_path)
     print(init_csv_path)
     print(init_report_path)

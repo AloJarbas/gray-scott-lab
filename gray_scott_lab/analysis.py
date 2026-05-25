@@ -68,6 +68,123 @@ class HorizonComparisonStudy:
     rows: tuple[HorizonComparisonRow, ...]
 
 
+HORIZON_TAG_SETTLED = 'settled'
+HORIZON_TAG_GROWING = 'growing'
+HORIZON_TAG_FADING = 'fading'
+HORIZON_TAG_REVERSING = 'reversing'
+HORIZON_TAGS: tuple[str, ...] = (
+    HORIZON_TAG_SETTLED,
+    HORIZON_TAG_GROWING,
+    HORIZON_TAG_FADING,
+    HORIZON_TAG_REVERSING,
+)
+HORIZON_SETTLED_ACTIVE_THRESHOLD = 0.05
+HORIZON_SETTLED_EDGE_THRESHOLD = 0.007
+HORIZON_TOTAL_GROW_THRESHOLD = 0.04
+HORIZON_TOTAL_FADE_THRESHOLD = -0.06
+HORIZON_LEG_SWING_THRESHOLD = 0.05
+
+
+@dataclass(frozen=True)
+class HorizonTagStepMetrics:
+    step: int
+    metrics: PatternMetrics
+
+
+@dataclass(frozen=True)
+class HorizonTagRow:
+    feed: float
+    kill: float
+    horizon_metrics: tuple[HorizonTagStepMetrics, ...]
+
+    def metrics_at(self, step: int) -> PatternMetrics:
+        for entry in self.horizon_metrics:
+            if entry.step == step:
+                return entry.metrics
+        raise KeyError(step)
+
+    @property
+    def early_step(self) -> int:
+        return self.horizon_metrics[0].step
+
+    @property
+    def middle_step(self) -> int:
+        return self.horizon_metrics[1].step
+
+    @property
+    def late_step(self) -> int:
+        return self.horizon_metrics[2].step
+
+    @property
+    def early_metrics(self) -> PatternMetrics:
+        return self.horizon_metrics[0].metrics
+
+    @property
+    def middle_metrics(self) -> PatternMetrics:
+        return self.horizon_metrics[1].metrics
+
+    @property
+    def late_metrics(self) -> PatternMetrics:
+        return self.horizon_metrics[2].metrics
+
+    @property
+    def early_active_delta(self) -> float:
+        return self.middle_metrics.active_fraction - self.early_metrics.active_fraction
+
+    @property
+    def late_active_delta(self) -> float:
+        return self.late_metrics.active_fraction - self.middle_metrics.active_fraction
+
+    @property
+    def total_active_delta(self) -> float:
+        return self.late_metrics.active_fraction - self.early_metrics.active_fraction
+
+    @property
+    def early_edge_delta(self) -> float:
+        return self.middle_metrics.edge_density - self.early_metrics.edge_density
+
+    @property
+    def late_edge_delta(self) -> float:
+        return self.late_metrics.edge_density - self.middle_metrics.edge_density
+
+    @property
+    def total_edge_delta(self) -> float:
+        return self.late_metrics.edge_density - self.early_metrics.edge_density
+
+    @property
+    def tag(self) -> str:
+        return classify_horizon_tag(self)
+
+
+@dataclass(frozen=True)
+class HorizonTagSpotlightFrame:
+    step: int
+    metrics: PatternMetrics
+    state: GrayScottState
+
+
+@dataclass(frozen=True)
+class HorizonTagSpotlight:
+    tag: str
+    title: str
+    reason: str
+    feed: float
+    kill: float
+    frames: tuple[HorizonTagSpotlightFrame, ...]
+
+
+@dataclass(frozen=True)
+class HorizonTagStudy:
+    early_steps: int
+    middle_steps: int
+    late_steps: int
+    size: int
+    patch_radius: int
+    seed: int
+    rows: tuple[HorizonTagRow, ...]
+    spotlights: tuple[HorizonTagSpotlight, ...]
+
+
 @dataclass(frozen=True)
 class GridSizeComparisonRow:
     feed: float
@@ -334,6 +451,176 @@ def study_horizon_comparison(
         patch_radius=patch_radius,
         seed=seed,
         rows=rows,
+    )
+
+
+def classify_horizon_tag(row: HorizonTagRow) -> str:
+    early_delta = row.early_active_delta
+    late_delta = row.late_active_delta
+    total_delta = row.total_active_delta
+    edge_early = row.early_edge_delta
+    edge_late = row.late_edge_delta
+
+    if total_delta <= HORIZON_TOTAL_FADE_THRESHOLD and (late_delta <= -0.03 or row.late_metrics.active_fraction <= 0.05):
+        return HORIZON_TAG_FADING
+    if (
+        max(abs(early_delta), abs(late_delta), abs(total_delta)) <= HORIZON_SETTLED_ACTIVE_THRESHOLD
+        and max(abs(edge_early), abs(edge_late)) <= HORIZON_SETTLED_EDGE_THRESHOLD
+    ):
+        return HORIZON_TAG_SETTLED
+    if total_delta >= HORIZON_TOTAL_GROW_THRESHOLD and late_delta >= -0.03:
+        return HORIZON_TAG_GROWING
+    if early_delta * late_delta < 0.0 and (abs(early_delta) >= HORIZON_LEG_SWING_THRESHOLD or abs(late_delta) >= HORIZON_LEG_SWING_THRESHOLD):
+        return HORIZON_TAG_REVERSING
+    return HORIZON_TAG_SETTLED
+
+
+def _horizon_tag_reason(row: HorizonTagRow) -> str:
+    if row.tag == HORIZON_TAG_SETTLED:
+        return (
+            f'F={row.feed:.3f}, k={row.kill:.3f} stays within ±{max(abs(row.early_active_delta), abs(row.late_active_delta)):.3f} active-fraction drift '
+            f'while edge density only moves by {max(abs(row.early_edge_delta), abs(row.late_edge_delta)):.4f} per leg.'
+        )
+    if row.tag == HORIZON_TAG_GROWING:
+        return (
+            f'F={row.feed:.3f}, k={row.kill:.3f} finishes {row.total_active_delta:+.3f} higher in active fraction by the late horizon '
+            f'with a last-leg edge change of {row.late_edge_delta:+.4f}.'
+        )
+    if row.tag == HORIZON_TAG_FADING:
+        return (
+            f'F={row.feed:.3f}, k={row.kill:.3f} loses {abs(row.total_active_delta):.3f} active fraction by the late horizon '
+            f'and ends near {row.late_metrics.active_fraction:.3f} occupancy.'
+        )
+    return (
+        f'F={row.feed:.3f}, k={row.kill:.3f} changes sign between legs: '
+        f'{row.early_active_delta:+.3f} first, then {row.late_active_delta:+.3f}.'
+    )
+
+
+def study_horizon_tags(
+    feeds: tuple[float, ...] = SCAN_FEEDS,
+    kills: tuple[float, ...] = SCAN_KILLS,
+    *,
+    early_steps: int = 700,
+    middle_steps: int = 1400,
+    late_steps: int = 2800,
+    size: int = 40,
+    patch_radius: int = 5,
+    seed: int = 0,
+) -> HorizonTagStudy:
+    if early_steps < 0 or middle_steps < 0 or late_steps < 0:
+        raise ValueError('step counts must be non-negative')
+    if not (early_steps < middle_steps < late_steps):
+        raise ValueError('need strictly increasing early, middle, and late step counts')
+
+    early_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=size,
+            steps=early_steps,
+            patch_radius=patch_radius,
+            seed=seed,
+        )
+    }
+    middle_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=size,
+            steps=middle_steps,
+            patch_radius=patch_radius,
+            seed=seed,
+        )
+    }
+    late_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=size,
+            steps=late_steps,
+            patch_radius=patch_radius,
+            seed=seed,
+        )
+    }
+
+    rows = tuple(
+        HorizonTagRow(
+            feed=feed,
+            kill=kill,
+            horizon_metrics=(
+                HorizonTagStepMetrics(step=early_steps, metrics=early_rows[(feed, kill)].metrics),
+                HorizonTagStepMetrics(step=middle_steps, metrics=middle_rows[(feed, kill)].metrics),
+                HorizonTagStepMetrics(step=late_steps, metrics=late_rows[(feed, kill)].metrics),
+            ),
+        )
+        for kill in kills
+        for feed in feeds
+    )
+
+    def make_spotlight(row: HorizonTagRow, *, title: str) -> HorizonTagSpotlight:
+        frames = tuple(
+            HorizonTagSpotlightFrame(
+                step=step,
+                metrics=row.metrics_at(step),
+                state=simulate(
+                    GrayScottParameters(feed=row.feed, kill=row.kill),
+                    size=size,
+                    steps=step,
+                    patch_radius=patch_radius,
+                    seed=seed,
+                ),
+            )
+            for step in (early_steps, middle_steps, late_steps)
+        )
+        return HorizonTagSpotlight(
+            tag=row.tag,
+            title=title,
+            reason=_horizon_tag_reason(row),
+            feed=row.feed,
+            kill=row.kill,
+            frames=frames,
+        )
+
+    settled_candidates = [
+        row for row in rows
+        if row.tag == HORIZON_TAG_SETTLED and 0.05 < row.late_metrics.active_fraction < 0.95
+    ]
+    if not settled_candidates:
+        settled_candidates = [row for row in rows if row.tag == HORIZON_TAG_SETTLED]
+    settled_row = min(
+        settled_candidates,
+        key=lambda row: (
+            max(abs(row.early_active_delta), abs(row.late_active_delta)),
+            max(abs(row.early_edge_delta), abs(row.late_edge_delta)),
+            -row.late_metrics.active_fraction,
+        ),
+    )
+
+    growing_candidates = [row for row in rows if row.tag == HORIZON_TAG_GROWING]
+    fading_candidates = [row for row in rows if row.tag == HORIZON_TAG_FADING]
+    reversing_candidates = [row for row in rows if row.tag == HORIZON_TAG_REVERSING]
+
+    spotlights = [make_spotlight(settled_row, title='Settled active counterexample')]
+    if growing_candidates:
+        spotlights.append(make_spotlight(max(growing_candidates, key=lambda row: (row.total_active_delta, row.late_edge_delta)), title='Late-growing cell'))
+    if fading_candidates:
+        spotlights.append(make_spotlight(min(fading_candidates, key=lambda row: row.total_active_delta), title='Late-fading cell'))
+    if reversing_candidates:
+        spotlights.append(make_spotlight(max(reversing_candidates, key=lambda row: max(abs(row.early_active_delta), abs(row.late_active_delta))), title='Reversing cell'))
+
+    return HorizonTagStudy(
+        early_steps=early_steps,
+        middle_steps=middle_steps,
+        late_steps=late_steps,
+        size=size,
+        patch_radius=patch_radius,
+        seed=seed,
+        rows=rows,
+        spotlights=tuple(spotlights),
     )
 
 

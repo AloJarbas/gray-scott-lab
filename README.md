@@ -21,13 +21,13 @@ This repo starts with a fixed seeded perturbation and then asks two day-one ques
 ## What is here
 
 - `gray_scott_lab/core.py`: deterministic seeding, explicit Euler updates, simulation helpers, and sampled trajectory capture for time-evolution studies
-- `gray_scott_lab/analysis.py`: curated presets, pattern metrics for activity and interface sharpness, a time-evolution study for the worm-band lane, a short-vs-long horizon comparison for the coarse parameter grid, a larger-lattice comparison that separates finite-size drift from the earlier time-horizon story, and now a seed-profile sensitivity pass that checks how much of the same grid still depends on the seeded patch geometry
-- `gray_scott_lab/render.py`: SVG atlas, parameter-map, time-evolution, horizon-comparison, grid-size-comparison, and initialization-sensitivity renderers plus PNG export
-- `gray_scott_lab/cli.py`: one-shot summaries plus atlas, metric-map, time-evolution, horizon-comparison, grid-size-comparison, and initialization-sensitivity rendering commands
+- `gray_scott_lab/analysis.py`: curated presets, pattern metrics for activity and interface sharpness, a time-evolution study for the worm-band lane, a short-vs-long horizon comparison for the coarse parameter grid, a larger-lattice comparison that separates finite-size drift from the earlier time-horizon story, a seed-profile sensitivity pass that checks how much of the same grid still depends on the seeded patch geometry, and now a three-horizon tag pass that splits the unsettled cells into settled, late-growing, late-fading, and reversing lanes
+- `gray_scott_lab/render.py`: SVG atlas, parameter-map, time-evolution, horizon-comparison, grid-size-comparison, horizon-tag, and initialization-sensitivity renderers plus PNG export
+- `gray_scott_lab/cli.py`: one-shot summaries plus atlas, metric-map, time-evolution, horizon-comparison, grid-size-comparison, horizon-tag, and initialization-sensitivity rendering commands
 - `scripts/generate_gallery.py`: rebuild the public artifacts, CSV sidecars, reports, and notebooks in one pass
-- `reports/pattern-atlas-and-parameter-scan.md`, `reports/time-evolution-sidecar.md`, `reports/horizon-comparison-sidecar.md`, `reports/grid-size-comparison-sidecar.md`, and `reports/initialization-sensitivity-sidecar.md`: technical sidecars for reading the regimes as final states, growth processes, horizon-sensitive scans, finite-size-sensitive scans, and now seed-geometry-sensitive scans
-- `notebooks/gray_scott_regimes.ipynb`, `notebooks/gray_scott_time_evolution.ipynb`, `notebooks/gray_scott_horizon_comparison.ipynb`, `notebooks/gray_scott_grid_size_comparison.ipynb`, and `notebooks/gray_scott_initialization_sensitivity.ipynb`: slower companions with equations, code, and interpretation
-- `tests/test_core.py`: small checks for determinism, bounds, regime separation, time-evolution sampling, horizon-comparison drift, grid-size sensitivity, and the new initialization-sensitivity pass
+- `reports/pattern-atlas-and-parameter-scan.md`, `reports/time-evolution-sidecar.md`, `reports/horizon-comparison-sidecar.md`, `reports/grid-size-comparison-sidecar.md`, `reports/horizon-tags-sidecar.md`, and `reports/initialization-sensitivity-sidecar.md`: technical sidecars for reading the regimes as final states, growth processes, horizon-sensitive scans, finite-size-sensitive scans, a new late-horizon tag pass, and seed-geometry-sensitive scans
+- `notebooks/gray_scott_regimes.ipynb`, `notebooks/gray_scott_time_evolution.ipynb`, `notebooks/gray_scott_horizon_comparison.ipynb`, `notebooks/gray_scott_grid_size_comparison.ipynb`, `notebooks/gray_scott_horizon_tags.ipynb`, and `notebooks/gray_scott_initialization_sensitivity.ipynb`: slower companions with equations, code, and interpretation
+- `tests/test_core.py`: small checks for determinism, bounds, regime separation, time-evolution sampling, horizon-comparison drift, grid-size sensitivity, the new horizon-tag split, and the initialization-sensitivity pass
 
 ## Generated artifacts
 
@@ -50,6 +50,10 @@ This repo starts with a fixed seeded perturbation and then asks two day-one ques
 ### Grid-size comparison sidecar
 
 <img src="art/gray-scott-grid-size-comparison.png" width="980" alt="Gray-Scott grid-size comparison card showing the coarse scan on 40x40 and 72x72 lattices plus active-fraction and edge-density drift maps" />
+
+### Horizon tags sidecar
+
+<img src="art/gray-scott-horizon-tags.png" width="980" alt="Gray-Scott horizon-tags card showing a bounded settled-versus-growing-versus-fading-versus-reversing map, a late active-drift map, and spotlight rows across three horizons" />
 
 ### Initialization-sensitivity sidecar
 
@@ -98,6 +102,12 @@ Render the smaller-vs-larger lattice comparison for the same coarse scan:
 python3 -m gray_scott_lab.cli render-grid-size-comparison --output art/gray-scott-grid-size-comparison.svg --png-output art/gray-scott-grid-size-comparison.png
 ```
 
+Render the three-horizon tag pass for the same coarse scan:
+
+```bash
+python3 -m gray_scott_lab.cli render-horizon-tags --output art/gray-scott-horizon-tags.svg --png-output art/gray-scott-horizon-tags.png
+```
+
 Render the seed-profile sensitivity comparison for the same coarse scan:
 
 ```bash
@@ -113,11 +123,12 @@ Most introductions stop at pretty pictures. This one starts building a reusable 
 - the time-evolution sidecar shows one regime as a growth process instead of only a final frame
 - the horizon-comparison sidecar checks whether the coarse scan had already settled or was still moving under a longer run
 - the grid-size comparison sidecar checks which longer-run cells stay stable on a larger lattice and which ones were still being steered by the small box
+- the new horizon-tags sidecar closes the next loophole by showing that the cells which are still moving do not all fail the same way, because some keep filling in, some fade away late, and a smaller set actually reverse between horizon legs
 - the new initialization-sensitivity sidecar checks which cells survive bounded seed-profile swaps and which ones still flip when the same initial disturbance is concentrated, split, or hollowed
 - the CSV, reports, notebooks, and tests make it easier to deepen into a real regime study later
 
 ## Good next moves
 
-- add one compact settled/growing/fading tag only if it sharpens the story instead of pretending to be a universal classifier
-- repeat the new seed-profile swap on one larger lattice only if that changes the sensitivity map instead of redrawing it
+- repeat the new horizon tags on one larger lattice only if the tag counts actually change instead of just recoloring the same cells
+- stress the new horizon tags against the split and ring seed profiles only if the reversing lane survives that swap
 - extend the chemistry lane with one second reaction-diffusion model only if it reveals a genuinely different pattern family instead of duplicating the same feed/kill story

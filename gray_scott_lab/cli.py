@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-from .analysis import CURATED_PRESETS, INITIALIZATION_PROFILES, SCAN_FEEDS, SCAN_KILLS, measure_pattern, preset_by_name, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_initialization_sensitivity, study_presets, study_time_evolution
+from .analysis import CURATED_PRESETS, INITIALIZATION_PROFILES, SCAN_FEEDS, SCAN_KILLS, measure_pattern, preset_by_name, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_horizon_tags, study_initialization_sensitivity, study_presets, study_time_evolution
 from .core import GrayScottParameters, simulate
-from .render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_initialization_sensitivity, render_metric_map, render_pattern_atlas, render_time_evolution
+from .render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_horizon_tags, render_initialization_sensitivity, render_metric_map, render_pattern_atlas, render_time_evolution
 
 
 def parse_series(value: str) -> tuple[float, ...]:
@@ -54,6 +54,18 @@ def main() -> None:
     horizon_parser.add_argument('--seed', type=int, default=0)
     horizon_parser.add_argument('--output', type=Path, required=True)
     horizon_parser.add_argument('--png-output', type=Path, default=None)
+
+    horizon_tags_parser = subparsers.add_parser('render-horizon-tags', help='render a three-horizon settled-vs-growing-vs-fading tag pass for the feed/kill scan')
+    horizon_tags_parser.add_argument('--feeds', type=parse_series, default=SCAN_FEEDS)
+    horizon_tags_parser.add_argument('--kills', type=parse_series, default=SCAN_KILLS)
+    horizon_tags_parser.add_argument('--early-steps', type=int, default=700)
+    horizon_tags_parser.add_argument('--middle-steps', type=int, default=1400)
+    horizon_tags_parser.add_argument('--late-steps', type=int, default=2800)
+    horizon_tags_parser.add_argument('--size', type=int, default=40)
+    horizon_tags_parser.add_argument('--patch-radius', type=int, default=5)
+    horizon_tags_parser.add_argument('--seed', type=int, default=0)
+    horizon_tags_parser.add_argument('--output', type=Path, required=True)
+    horizon_tags_parser.add_argument('--png-output', type=Path, default=None)
 
     grid_size_parser = subparsers.add_parser('render-grid-size-comparison', help='render a smaller-vs-larger lattice comparison for the feed/kill scan')
     grid_size_parser.add_argument('--feeds', type=parse_series, default=SCAN_FEEDS)
@@ -147,6 +159,24 @@ def main() -> None:
             seed=args.seed,
         )
         content = render_grid_size_comparison(study, args.feeds, args.kills)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(content)
+        if args.png_output is not None:
+            export_png_from_svg(args.output, args.png_output, size=2200, dpi=300)
+        return
+
+    if args.command == 'render-horizon-tags':
+        study = study_horizon_tags(
+            feeds=args.feeds,
+            kills=args.kills,
+            early_steps=args.early_steps,
+            middle_steps=args.middle_steps,
+            late_steps=args.late_steps,
+            size=args.size,
+            patch_radius=args.patch_radius,
+            seed=args.seed,
+        )
+        content = render_horizon_tags(study, args.feeds, args.kills)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(content)
         if args.png_output is not None:
