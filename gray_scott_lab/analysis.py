@@ -181,6 +181,7 @@ class HorizonTagStudy:
     size: int
     patch_radius: int
     seed: int
+    profile: str
     rows: tuple[HorizonTagRow, ...]
     spotlights: tuple[HorizonTagSpotlight, ...]
 
@@ -284,6 +285,114 @@ class InitializationSensitivityStudy:
     spotlights: tuple[InitializationSensitivitySpotlight, ...]
 
 
+PROFILE_HORIZON_STABLE = 'stable'
+PROFILE_HORIZON_SINGLE_FLIP = 'single-flip'
+PROFILE_HORIZON_THREE_WAY_SPLIT = 'three-way-split'
+
+
+@dataclass(frozen=True)
+class ProfileHorizonTagProfileRow:
+    profile: str
+    row: HorizonTagRow
+
+
+@dataclass(frozen=True)
+class ProfileHorizonTagRow:
+    feed: float
+    kill: float
+    profile_rows: tuple[ProfileHorizonTagProfileRow, ...]
+
+    def row_for(self, profile: str) -> HorizonTagRow:
+        for entry in self.profile_rows:
+            if entry.profile == profile:
+                return entry.row
+        raise KeyError(profile)
+
+    @property
+    def tags(self) -> tuple[str, ...]:
+        return tuple(entry.row.tag for entry in self.profile_rows)
+
+    @property
+    def unique_tag_count(self) -> int:
+        return len(set(self.tags))
+
+    @property
+    def agreement_count(self) -> int:
+        return max(self.tags.count(tag) for tag in set(self.tags))
+
+    @property
+    def stability_class(self) -> str:
+        if self.unique_tag_count == 1:
+            return PROFILE_HORIZON_STABLE
+        if self.unique_tag_count == 2:
+            return PROFILE_HORIZON_SINGLE_FLIP
+        return PROFILE_HORIZON_THREE_WAY_SPLIT
+
+    @property
+    def majority_tag(self) -> str | None:
+        if self.agreement_count < 2:
+            return None
+        for tag in self.tags:
+            if self.tags.count(tag) == self.agreement_count:
+                return tag
+        return None
+
+    @property
+    def stable_tag(self) -> str | None:
+        return self.tags[0] if self.unique_tag_count == 1 else None
+
+    @property
+    def late_active_fraction_span(self) -> float:
+        values = [entry.row.late_metrics.active_fraction for entry in self.profile_rows]
+        return max(values) - min(values)
+
+    @property
+    def total_active_delta_span(self) -> float:
+        values = [entry.row.total_active_delta for entry in self.profile_rows]
+        return max(values) - min(values)
+
+    @property
+    def max_late_active_fraction(self) -> float:
+        return max(entry.row.late_metrics.active_fraction for entry in self.profile_rows)
+
+    @property
+    def min_late_active_fraction(self) -> float:
+        return min(entry.row.late_metrics.active_fraction for entry in self.profile_rows)
+
+    @property
+    def reversing_profiles(self) -> tuple[str, ...]:
+        return tuple(entry.profile for entry in self.profile_rows if entry.row.tag == HORIZON_TAG_REVERSING)
+
+
+@dataclass(frozen=True)
+class ProfileHorizonTagSpotlightProfile:
+    profile: str
+    row: HorizonTagRow
+    state: GrayScottState
+
+
+@dataclass(frozen=True)
+class ProfileHorizonTagSpotlight:
+    title: str
+    reason: str
+    feed: float
+    kill: float
+    profiles: tuple[ProfileHorizonTagSpotlightProfile, ...]
+
+
+@dataclass(frozen=True)
+class ProfileHorizonTagStudy:
+    early_steps: int
+    middle_steps: int
+    late_steps: int
+    size: int
+    patch_radius: int
+    seed: int
+    profiles: tuple[str, ...]
+    rows: tuple[ProfileHorizonTagRow, ...]
+    spotlights: tuple[ProfileHorizonTagSpotlight, ...]
+
+
 CURATED_PRESETS: tuple[GrayScottPreset, ...] = (
     GrayScottPreset(name='sparse spots', feed=0.014, kill=0.054, steps=1800, size=72, patch_radius=7, seed=0),
     GrayScottPreset(name='worm bands', feed=0.022, kill=0.051, steps=1600, size=72, patch_radius=7, seed=0),
@@ -351,6 +460,7 @@ def scan_parameter_grid(
     steps: int = 700,
     patch_radius: int = 5,
     seed: int = 0,
+    profile: str = 'center',
 ) -> list[ParameterScanRow]:
     rows: list[ParameterScanRow] = []
     for kill in kills:
@@ -361,9 +471,74 @@ def scan_parameter_grid(
                 steps=steps,
                 patch_radius=patch_radius,
                 seed=seed,
+                profile=profile,
             )
             rows.append(ParameterScanRow(feed=feed, kill=kill, metrics=measure_pattern(state)))
     return rows
+
+
+def _build_horizon_rows(
+    feeds: tuple[float, ...],
+    kills: tuple[float, ...],
+    *,
+    early_steps: int,
+    middle_steps: int,
+    late_steps: int,
+    size: int,
+    patch_radius: int,
+    seed: int,
+    profile: str,
+) -> tuple[HorizonTagRow, ...]:
+    early_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=size,
+            steps=early_steps,
+            patch_radius=patch_radius,
+            seed=seed,
+            profile=profile,
+        )
+    }
+    middle_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=size,
+            steps=middle_steps,
+            patch_radius=patch_radius,
+            seed=seed,
+            profile=profile,
+        )
+    }
+    late_rows = {
+        (row.feed, row.kill): row
+        for row in scan_parameter_grid(
+            feeds,
+            kills,
+            size=size,
+            steps=late_steps,
+            patch_radius=patch_radius,
+            seed=seed,
+            profile=profile,
+        )
+    }
+
+    return tuple(
+        HorizonTagRow(
+            feed=feed,
+            kill=kill,
+            horizon_metrics=(
+                HorizonTagStepMetrics(step=early_steps, metrics=early_rows[(feed, kill)].metrics),
+                HorizonTagStepMetrics(step=middle_steps, metrics=middle_rows[(feed, kill)].metrics),
+                HorizonTagStepMetrics(step=late_steps, metrics=late_rows[(feed, kill)].metrics),
+            ),
+        )
+        for kill in kills
+        for feed in feeds
+    )
 
 
 def preset_by_name(name: str) -> GrayScottPreset:
@@ -507,58 +682,23 @@ def study_horizon_tags(
     size: int = 40,
     patch_radius: int = 5,
     seed: int = 0,
+    profile: str = 'center',
 ) -> HorizonTagStudy:
     if early_steps < 0 or middle_steps < 0 or late_steps < 0:
         raise ValueError('step counts must be non-negative')
     if not (early_steps < middle_steps < late_steps):
         raise ValueError('need strictly increasing early, middle, and late step counts')
 
-    early_rows = {
-        (row.feed, row.kill): row
-        for row in scan_parameter_grid(
-            feeds,
-            kills,
-            size=size,
-            steps=early_steps,
-            patch_radius=patch_radius,
-            seed=seed,
-        )
-    }
-    middle_rows = {
-        (row.feed, row.kill): row
-        for row in scan_parameter_grid(
-            feeds,
-            kills,
-            size=size,
-            steps=middle_steps,
-            patch_radius=patch_radius,
-            seed=seed,
-        )
-    }
-    late_rows = {
-        (row.feed, row.kill): row
-        for row in scan_parameter_grid(
-            feeds,
-            kills,
-            size=size,
-            steps=late_steps,
-            patch_radius=patch_radius,
-            seed=seed,
-        )
-    }
-
-    rows = tuple(
-        HorizonTagRow(
-            feed=feed,
-            kill=kill,
-            horizon_metrics=(
-                HorizonTagStepMetrics(step=early_steps, metrics=early_rows[(feed, kill)].metrics),
-                HorizonTagStepMetrics(step=middle_steps, metrics=middle_rows[(feed, kill)].metrics),
-                HorizonTagStepMetrics(step=late_steps, metrics=late_rows[(feed, kill)].metrics),
-            ),
-        )
-        for kill in kills
-        for feed in feeds
+    rows = _build_horizon_rows(
+        feeds,
+        kills,
+        early_steps=early_steps,
+        middle_steps=middle_steps,
+        late_steps=late_steps,
+        size=size,
+        patch_radius=patch_radius,
+        seed=seed,
+        profile=profile,
     )
 
     def make_spotlight(row: HorizonTagRow, *, title: str) -> HorizonTagSpotlight:
@@ -572,6 +712,7 @@ def study_horizon_tags(
                     steps=step,
                     patch_radius=patch_radius,
                     seed=seed,
+                    profile=profile,
                 ),
             )
             for step in (early_steps, middle_steps, late_steps)
@@ -619,6 +760,7 @@ def study_horizon_tags(
         size=size,
         patch_radius=patch_radius,
         seed=seed,
+        profile=profile,
         rows=rows,
         spotlights=tuple(spotlights),
     )
@@ -809,5 +951,153 @@ def study_initialization_sensitivity(
         seed=seed,
         profiles=profiles,
         rows=tuple(rows),
+        spotlights=tuple(spotlights),
+    )
+
+
+def study_profile_horizon_tags(
+    feeds: tuple[float, ...] = SCAN_FEEDS,
+    kills: tuple[float, ...] = SCAN_KILLS,
+    *,
+    early_steps: int = 700,
+    middle_steps: int = 1400,
+    late_steps: int = 2800,
+    size: int = 40,
+    patch_radius: int = 5,
+    seed: int = 0,
+    profiles: tuple[str, ...] = INITIALIZATION_PROFILES,
+) -> ProfileHorizonTagStudy:
+    if len(profiles) < 2:
+        raise ValueError('need at least two profiles')
+
+    profile_rows = {
+        profile: _build_horizon_rows(
+            feeds,
+            kills,
+            early_steps=early_steps,
+            middle_steps=middle_steps,
+            late_steps=late_steps,
+            size=size,
+            patch_radius=patch_radius,
+            seed=seed,
+            profile=profile,
+        )
+        for profile in profiles
+    }
+    row_lookup = {
+        profile: {(row.feed, row.kill): row for row in rows}
+        for profile, rows in profile_rows.items()
+    }
+    rows = tuple(
+        ProfileHorizonTagRow(
+            feed=feed,
+            kill=kill,
+            profile_rows=tuple(
+                ProfileHorizonTagProfileRow(profile=profile, row=row_lookup[profile][(feed, kill)])
+                for profile in profiles
+            ),
+        )
+        for kill in kills
+        for feed in feeds
+    )
+
+    if not rows:
+        return ProfileHorizonTagStudy(
+            early_steps=early_steps,
+            middle_steps=middle_steps,
+            late_steps=late_steps,
+            size=size,
+            patch_radius=patch_radius,
+            seed=seed,
+            profiles=profiles,
+            rows=tuple(),
+            spotlights=tuple(),
+        )
+
+    def make_spotlight(row: ProfileHorizonTagRow, *, title: str, reason: str) -> ProfileHorizonTagSpotlight:
+        return ProfileHorizonTagSpotlight(
+            title=title,
+            reason=reason,
+            feed=row.feed,
+            kill=row.kill,
+            profiles=tuple(
+                ProfileHorizonTagSpotlightProfile(
+                    profile=profile,
+                    row=row.row_for(profile),
+                    state=simulate(
+                        GrayScottParameters(feed=row.feed, kill=row.kill),
+                        size=size,
+                        steps=late_steps,
+                        patch_radius=patch_radius,
+                        seed=seed,
+                        profile=profile,
+                    ),
+                )
+                for profile in profiles
+            ),
+        )
+
+    three_way_candidates = [row for row in rows if row.stability_class == PROFILE_HORIZON_THREE_WAY_SPLIT]
+    rescue_candidates = [
+        row for row in rows
+        if row.min_late_active_fraction <= 0.05 and row.max_late_active_fraction >= 0.30 and row.unique_tag_count >= 2
+    ]
+    stable_active_candidates = [
+        row for row in rows
+        if row.stability_class == PROFILE_HORIZON_STABLE and row.min_late_active_fraction > 0.05
+    ]
+
+    three_way = max(
+        three_way_candidates if three_way_candidates else rows,
+        key=lambda row: (row.unique_tag_count, row.late_active_fraction_span, row.total_active_delta_span),
+    )
+    rescue = max(
+        rescue_candidates if rescue_candidates else rows,
+        key=lambda row: (row.late_active_fraction_span, row.total_active_delta_span, row.unique_tag_count),
+    )
+    stable_active = min(
+        stable_active_candidates if stable_active_candidates else rows,
+        key=lambda row: (row.late_active_fraction_span, row.total_active_delta_span, -row.max_late_active_fraction),
+    )
+
+    spotlights = [
+        make_spotlight(
+            three_way,
+            title='Three-way tag split',
+            reason=(
+                f'F={three_way.feed:.3f}, k={three_way.kill:.3f} changes late-horizon meaning across profiles '
+                f'({", ".join(f"{profile}: {three_way.row_for(profile).tag}" for profile in profiles)}).'
+            ),
+        ),
+        make_spotlight(
+            rescue,
+            title='Profile rescue cell',
+            reason=(
+                f'F={rescue.feed:.3f}, k={rescue.kill:.3f} swings from {rescue.min_late_active_fraction:.3f} to '
+                f'{rescue.max_late_active_fraction:.3f} late occupancy depending only on the seeded geometry.'
+            ),
+        ),
+    ]
+    if stable_active != three_way and stable_active != rescue:
+        spotlights.append(
+            make_spotlight(
+                stable_active,
+                title='Stable active counterexample',
+                reason=(
+                    f'F={stable_active.feed:.3f}, k={stable_active.kill:.3f} keeps one shared late-horizon tag '
+                    f'under every bounded seed profile while staying visibly active.'
+                ),
+            )
+        )
+
+    return ProfileHorizonTagStudy(
+        early_steps=early_steps,
+        middle_steps=middle_steps,
+        late_steps=late_steps,
+        size=size,
+        patch_radius=patch_radius,
+        seed=seed,
+        profiles=profiles,
+        rows=rows,
         spotlights=tuple(spotlights),
     )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from gray_scott_lab.analysis import HORIZON_TAG_FADING, HORIZON_TAG_GROWING, HORIZON_TAG_REVERSING, HORIZON_TAG_SETTLED, TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, scaled_patch_radius, study_grid_size_comparison, study_horizon_comparison, study_horizon_tags, study_initialization_sensitivity, study_time_evolution
+from gray_scott_lab.analysis import HORIZON_TAG_FADING, HORIZON_TAG_GROWING, HORIZON_TAG_REVERSING, HORIZON_TAG_SETTLED, PROFILE_HORIZON_SINGLE_FLIP, PROFILE_HORIZON_THREE_WAY_SPLIT, TIME_EVOLUTION_PRESET, measure_pattern, scan_parameter_grid, scaled_patch_radius, study_grid_size_comparison, study_horizon_comparison, study_horizon_tags, study_initialization_sensitivity, study_profile_horizon_tags, study_time_evolution
 from gray_scott_lab.core import GrayScottParameters, seed_state, simulate, simulate_samples
 
 
@@ -118,6 +118,32 @@ class GrayScottTests(unittest.TestCase):
     def test_horizon_tags_require_strictly_increasing_steps(self) -> None:
         with self.assertRaises(ValueError):
             study_horizon_tags(early_steps=700, middle_steps=700, late_steps=1400)
+
+    def test_profile_horizon_tags_detect_three_way_and_two_way_flips(self) -> None:
+        study = study_profile_horizon_tags(
+            (0.022, 0.026, 0.030),
+            (0.051, 0.060, 0.063),
+            early_steps=700,
+            middle_steps=1400,
+            late_steps=2800,
+            size=40,
+            patch_radius=5,
+            seed=0,
+        )
+        by_cell = {(row.feed, row.kill): row for row in study.rows}
+        split = by_cell[(0.022, 0.051)]
+        rescue = by_cell[(0.026, 0.051)]
+        center_growth = by_cell[(0.030, 0.063)]
+        self.assertEqual(split.stability_class, PROFILE_HORIZON_THREE_WAY_SPLIT)
+        self.assertEqual(tuple(entry.row.tag for entry in split.profile_rows), (HORIZON_TAG_REVERSING, HORIZON_TAG_GROWING, HORIZON_TAG_SETTLED))
+        self.assertEqual(rescue.stability_class, PROFILE_HORIZON_SINGLE_FLIP)
+        self.assertEqual(tuple(entry.row.tag for entry in rescue.profile_rows), (HORIZON_TAG_FADING, HORIZON_TAG_REVERSING, HORIZON_TAG_FADING))
+        self.assertEqual(center_growth.stability_class, PROFILE_HORIZON_SINGLE_FLIP)
+        self.assertEqual(tuple(entry.row.tag for entry in center_growth.profile_rows), (HORIZON_TAG_GROWING, HORIZON_TAG_SETTLED, HORIZON_TAG_SETTLED))
+
+    def test_profile_horizon_tags_require_multiple_profiles(self) -> None:
+        with self.assertRaises(ValueError):
+            study_profile_horizon_tags(profiles=('center',))
 
 
 if __name__ == '__main__':

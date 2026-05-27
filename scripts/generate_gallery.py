@@ -10,9 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gray_scott_lab.analysis import CURATED_PRESETS, HORIZON_TAG_FADING, HORIZON_TAG_GROWING, HORIZON_TAG_REVERSING, HORIZON_TAG_SETTLED, INITIALIZATION_PROFILES, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_horizon_tags, study_initialization_sensitivity, study_presets, study_time_evolution
+from gray_scott_lab.analysis import CURATED_PRESETS, HORIZON_TAG_FADING, HORIZON_TAG_GROWING, HORIZON_TAG_REVERSING, HORIZON_TAG_SETTLED, INITIALIZATION_PROFILES, PROFILE_HORIZON_SINGLE_FLIP, PROFILE_HORIZON_STABLE, PROFILE_HORIZON_THREE_WAY_SPLIT, SCAN_FEEDS, SCAN_KILLS, TIME_EVOLUTION_PRESET, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_horizon_tags, study_initialization_sensitivity, study_presets, study_profile_horizon_tags, study_time_evolution
 from gray_scott_lab.core import seed_profile_label
-from gray_scott_lab.render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_horizon_tags, render_initialization_sensitivity, render_metric_map, render_pattern_atlas, render_time_evolution
+from gray_scott_lab.render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_horizon_tags, render_initialization_sensitivity, render_metric_map, render_pattern_atlas, render_profile_horizon_tags, render_time_evolution
 ART = ROOT / 'art'
 REPORTS = ROOT / 'reports'
 NOTEBOOKS = ROOT / 'notebooks'
@@ -995,6 +995,185 @@ def write_initialization_sensitivity() -> tuple[Path, Path, Path, Path]:
     return svg_path, csv_path, report_path, notebook_path
 
 
+def write_profile_horizon_tags() -> tuple[Path, Path, Path, Path]:
+    ART.mkdir(parents=True, exist_ok=True)
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    NOTEBOOKS.mkdir(parents=True, exist_ok=True)
+
+    study = study_profile_horizon_tags(
+        SCAN_FEEDS,
+        SCAN_KILLS,
+        early_steps=700,
+        middle_steps=1400,
+        late_steps=2800,
+        size=40,
+        patch_radius=5,
+        seed=0,
+        profiles=INITIALIZATION_PROFILES,
+    )
+    svg_path = ART / 'gray-scott-profile-horizon-tags.svg'
+    png_path = ART / 'gray-scott-profile-horizon-tags.png'
+    csv_path = ART / 'gray-scott-profile-horizon-tags.csv'
+    report_path = REPORTS / 'profile-horizon-tags-sidecar.md'
+    notebook_path = NOTEBOOKS / 'gray_scott_profile_horizon_tags.ipynb'
+
+    svg_path.write_text(render_profile_horizon_tags(study, SCAN_FEEDS, SCAN_KILLS))
+    export_png_from_svg(svg_path, png_path, size=2200, dpi=300)
+
+    with csv_path.open('w', newline='') as handle:
+        writer = csv.writer(handle)
+        writer.writerow([
+            'feed',
+            'kill',
+            'stability_class',
+            'agreement_count',
+            'majority_tag',
+            'late_active_fraction_span',
+            'total_active_delta_span',
+            'center_tag',
+            'double_tag',
+            'ring_tag',
+            'center_late_active_fraction',
+            'double_late_active_fraction',
+            'ring_late_active_fraction',
+            'center_total_active_delta',
+            'double_total_active_delta',
+            'ring_total_active_delta',
+            'reversing_profiles',
+        ])
+        for row in study.rows:
+            center = row.row_for('center')
+            double = row.row_for('double')
+            ring = row.row_for('ring')
+            writer.writerow([
+                row.feed,
+                row.kill,
+                row.stability_class,
+                row.agreement_count,
+                row.majority_tag or '',
+                row.late_active_fraction_span,
+                row.total_active_delta_span,
+                center.tag,
+                double.tag,
+                ring.tag,
+                center.late_metrics.active_fraction,
+                double.late_metrics.active_fraction,
+                ring.late_metrics.active_fraction,
+                center.total_active_delta,
+                double.total_active_delta,
+                ring.total_active_delta,
+                ','.join(row.reversing_profiles),
+            ])
+
+    stability_counts = Counter(row.stability_class for row in study.rows)
+    profile_counts = {
+        profile: Counter(row.row_for(profile).tag for row in study.rows)
+        for profile in study.profiles
+    }
+    largest_span = max(study.rows, key=lambda row: row.late_active_fraction_span)
+    three_way = next((spotlight for spotlight in study.spotlights if spotlight.title == 'Three-way tag split'), None)
+    rescue = next((spotlight for spotlight in study.spotlights if spotlight.title == 'Profile rescue cell'), None)
+    stable_active = next((spotlight for spotlight in study.spotlights if spotlight.title == 'Stable active counterexample'), None)
+
+    lines = [
+        '# Gray-Scott seed-profile horizon tags sidecar',
+        '',
+        'The earlier horizon-tag card made one honest point: the unsettled cells were not one generic caution blob. But it still left one question open: **does that late-horizon fate belong to the chemistry cell itself, or can the seeded geometry still change the tag?**',
+        '',
+        f'This sidecar keeps the same `{study.size}×{study.size}` grid, the same `{study.early_steps}` → `{study.middle_steps}` → `{study.late_steps}` horizon rule, and the same feed/kill scan. It only swaps between `{seed_profile_label("center")}`, `{seed_profile_label("double")}`, and `{seed_profile_label("ring")}`.',
+        '',
+        '## Tag agreement across profiles',
+        '',
+        f'- stable cells (`3x`): `{stability_counts.get(PROFILE_HORIZON_STABLE, 0)}`',
+        f'- two-against-one flips (`2+1`): `{stability_counts.get(PROFILE_HORIZON_SINGLE_FLIP, 0)}`',
+        f'- three-way splits: `{stability_counts.get(PROFILE_HORIZON_THREE_WAY_SPLIT, 0)}`',
+        f'- largest late active-fraction span: `F = {largest_span.feed:.3f}`, `k = {largest_span.kill:.3f}`, `span = {largest_span.late_active_fraction_span:.3f}`',
+        '',
+        '## Per-profile tag counts',
+        '',
+        f'- centered square: settled `{profile_counts["center"].get(HORIZON_TAG_SETTLED, 0)}`, growing `{profile_counts["center"].get(HORIZON_TAG_GROWING, 0)}`, fading `{profile_counts["center"].get(HORIZON_TAG_FADING, 0)}`, reversing `{profile_counts["center"].get(HORIZON_TAG_REVERSING, 0)}`',
+        f'- split twin patches: settled `{profile_counts["double"].get(HORIZON_TAG_SETTLED, 0)}`, growing `{profile_counts["double"].get(HORIZON_TAG_GROWING, 0)}`, fading `{profile_counts["double"].get(HORIZON_TAG_FADING, 0)}`, reversing `{profile_counts["double"].get(HORIZON_TAG_REVERSING, 0)}`',
+        f'- annulus shell: settled `{profile_counts["ring"].get(HORIZON_TAG_SETTLED, 0)}`, growing `{profile_counts["ring"].get(HORIZON_TAG_GROWING, 0)}`, fading `{profile_counts["ring"].get(HORIZON_TAG_FADING, 0)}`, reversing `{profile_counts["ring"].get(HORIZON_TAG_REVERSING, 0)}`',
+        '',
+        '## The useful read',
+        '',
+        f'- three-way split example: `F = {three_way.feed:.3f}`, `k = {three_way.kill:.3f}`' if three_way is not None else '- no three-way split cleared the bounded grid on this run',
+        f'- profile rescue example: `F = {rescue.feed:.3f}`, `k = {rescue.kill:.3f}`' if rescue is not None else '- no rescue cell crossed the bounded threshold on this run',
+        f'- stable active counterexample: `F = {stable_active.feed:.3f}`, `k = {stable_active.kill:.3f}`' if stable_active is not None else '- no active stable counterexample was needed on this run',
+        '- the core point is that the late-horizon tag is not always a chemistry-only identity. Some cells keep one shared tag across seed profiles, but others move between fading, growing, and reversing even though feed, kill, lattice, and horizon rule never changed.',
+        '- that makes the old reversing lane narrower and more conditional than the center-profile card alone suggested. The seed geometry can erase it, move it, or create a different late-horizon caution altogether.',
+        '',
+        '## Caveat',
+        '',
+        'This is still a bounded three-profile audit, not a universal initialization theorem. It makes the caveat packet sharper because it shows where the late-horizon read survives the profile swap and where it does not.',
+        '',
+        'Open `art/gray-scott-profile-horizon-tags.png`, `art/gray-scott-profile-horizon-tags.csv`, and `notebooks/gray_scott_profile_horizon_tags.ipynb` together next.',
+    ]
+    report_path.write_text('\n'.join(lines) + '\n')
+
+    notebook = {
+        'cells': [
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '# Gray-Scott seed-profile horizon tags\n',
+                    '\n',
+                    'This notebook is the slower companion to `reports/profile-horizon-tags-sidecar.md`.\n',
+                    '\n',
+                    'The bounded question here is simple: **if the chemistry stays fixed, how much of the late-horizon tag survives a swap from one seed geometry to another?**\n',
+                ],
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'from gray_scott_lab.analysis import SCAN_FEEDS, SCAN_KILLS, study_profile_horizon_tags\n',
+                    '\n',
+                    'study = study_profile_horizon_tags(SCAN_FEEDS, SCAN_KILLS, early_steps=700, middle_steps=1400, late_steps=2800)\n',
+                    '[(row.feed, row.kill, row.stability_class, tuple(entry.row.tag for entry in row.profile_rows), round(row.late_active_fraction_span, 3)) for row in study.rows]\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## The new figure\n',
+                    '\n',
+                    '![Gray-Scott seed-profile horizon tags](../art/gray-scott-profile-horizon-tags.png)\n',
+                    '\n',
+                    'Read it in three passes:\n',
+                    '\n',
+                    '1. compare the three per-profile tag maps directly\n',
+                    '2. use the agreement map to find cells where the tag is actually profile-stable\n',
+                    '3. use the late-span map and spotlight rows to see whether the tag drift is just a relabel or a real fate change\n',
+                ],
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '## Problems worth trying next\n',
+                    '\n',
+                    '1. Repeat this same profile-tag study on one larger lattice only if the agreement counts actually change.\n',
+                    '2. Add one second reaction-diffusion model only if it reveals a genuinely different profile-versus-horizon failure split.\n',
+                    '3. Test one extra bounded seed profile only if it changes the profile-stability map instead of just adding one more cosmetic variant.\n',
+                ],
+            },
+        ],
+        'metadata': {
+            'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
+            'language_info': {'name': 'python', 'version': '3.11'},
+        },
+        'nbformat': 4,
+        'nbformat_minor': 5,
+    }
+    notebook_path.write_text(json.dumps(notebook, indent=2) + '\n')
+    return svg_path, csv_path, report_path, notebook_path
+
+
 def main() -> None:
     atlas_path = write_atlas()
     map_path, csv_path = write_metric_map()
@@ -1004,6 +1183,7 @@ def main() -> None:
     grid_size_path, grid_size_csv_path, grid_size_report_path, grid_size_notebook_path = write_grid_size_comparison()
     horizon_tags_path, horizon_tags_csv_path, horizon_tags_report_path, horizon_tags_notebook_path = write_horizon_tags()
     init_path, init_csv_path, init_report_path, init_notebook_path = write_initialization_sensitivity()
+    profile_horizon_path, profile_horizon_csv_path, profile_horizon_report_path, profile_horizon_notebook_path = write_profile_horizon_tags()
     print(atlas_path)
     print(map_path)
     print(csv_path)
@@ -1028,6 +1208,10 @@ def main() -> None:
     print(init_csv_path)
     print(init_report_path)
     print(init_notebook_path)
+    print(profile_horizon_path)
+    print(profile_horizon_csv_path)
+    print(profile_horizon_report_path)
+    print(profile_horizon_notebook_path)
 
 
 if __name__ == '__main__':

@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-from .analysis import CURATED_PRESETS, INITIALIZATION_PROFILES, SCAN_FEEDS, SCAN_KILLS, measure_pattern, preset_by_name, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_horizon_tags, study_initialization_sensitivity, study_presets, study_time_evolution
+from .analysis import CURATED_PRESETS, INITIALIZATION_PROFILES, SCAN_FEEDS, SCAN_KILLS, measure_pattern, preset_by_name, scan_parameter_grid, study_grid_size_comparison, study_horizon_comparison, study_horizon_tags, study_initialization_sensitivity, study_presets, study_profile_horizon_tags, study_time_evolution
 from .core import GrayScottParameters, simulate
-from .render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_horizon_tags, render_initialization_sensitivity, render_metric_map, render_pattern_atlas, render_time_evolution
+from .render import export_png_from_svg, render_grid_size_comparison, render_horizon_comparison, render_horizon_tags, render_initialization_sensitivity, render_metric_map, render_pattern_atlas, render_profile_horizon_tags, render_time_evolution
 
 
 def parse_series(value: str) -> tuple[float, ...]:
@@ -89,6 +89,19 @@ def main() -> None:
     init_parser.add_argument('--profiles', type=lambda value: tuple(part.strip() for part in value.split(',') if part.strip()), default=INITIALIZATION_PROFILES)
     init_parser.add_argument('--output', type=Path, required=True)
     init_parser.add_argument('--png-output', type=Path, default=None)
+
+    profile_horizon_parser = subparsers.add_parser('render-profile-horizon-tags', help='render the three-horizon tag rule under multiple seed profiles')
+    profile_horizon_parser.add_argument('--feeds', type=parse_series, default=SCAN_FEEDS)
+    profile_horizon_parser.add_argument('--kills', type=parse_series, default=SCAN_KILLS)
+    profile_horizon_parser.add_argument('--early-steps', type=int, default=700)
+    profile_horizon_parser.add_argument('--middle-steps', type=int, default=1400)
+    profile_horizon_parser.add_argument('--late-steps', type=int, default=2800)
+    profile_horizon_parser.add_argument('--size', type=int, default=40)
+    profile_horizon_parser.add_argument('--patch-radius', type=int, default=5)
+    profile_horizon_parser.add_argument('--seed', type=int, default=0)
+    profile_horizon_parser.add_argument('--profiles', type=lambda value: tuple(part.strip() for part in value.split(',') if part.strip()), default=INITIALIZATION_PROFILES)
+    profile_horizon_parser.add_argument('--output', type=Path, required=True)
+    profile_horizon_parser.add_argument('--png-output', type=Path, default=None)
 
     args = parser.parse_args()
 
@@ -194,6 +207,25 @@ def main() -> None:
             profiles=args.profiles,
         )
         content = render_initialization_sensitivity(study, args.feeds, args.kills)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(content)
+        if args.png_output is not None:
+            export_png_from_svg(args.output, args.png_output, size=2200, dpi=300)
+        return
+
+    if args.command == 'render-profile-horizon-tags':
+        study = study_profile_horizon_tags(
+            feeds=args.feeds,
+            kills=args.kills,
+            early_steps=args.early_steps,
+            middle_steps=args.middle_steps,
+            late_steps=args.late_steps,
+            size=args.size,
+            patch_radius=args.patch_radius,
+            seed=args.seed,
+            profiles=args.profiles,
+        )
+        content = render_profile_horizon_tags(study, args.feeds, args.kills)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(content)
         if args.png_output is not None:

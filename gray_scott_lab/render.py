@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 
-from .analysis import GridSizeComparisonStudy, HorizonComparisonStudy, HorizonTagStudy, HORIZON_TAG_FADING, HORIZON_TAG_GROWING, HORIZON_TAG_REVERSING, HORIZON_TAG_SETTLED, InitializationSensitivityStudy, ParameterScanRow, PresetStudy, TimeEvolutionStudy
+from .analysis import GridSizeComparisonStudy, HorizonComparisonStudy, HorizonTagStudy, HORIZON_TAG_FADING, HORIZON_TAG_GROWING, HORIZON_TAG_REVERSING, HORIZON_TAG_SETTLED, InitializationSensitivityStudy, ParameterScanRow, PresetStudy, ProfileHorizonTagStudy, PROFILE_HORIZON_SINGLE_FLIP, PROFILE_HORIZON_STABLE, PROFILE_HORIZON_THREE_WAY_SPLIT, TimeEvolutionStudy
 from .core import GrayScottState, seed_profile_label
 
 
@@ -112,6 +112,24 @@ def horizon_tag_long_label(tag: str) -> str:
         HORIZON_TAG_REVERSING: 'reversing',
     }
     return mapping[tag]
+
+
+def profile_horizon_stability_color(label: str) -> str:
+    mapping = {
+        PROFILE_HORIZON_STABLE: '#16a34a',
+        PROFILE_HORIZON_SINGLE_FLIP: '#f59e0b',
+        PROFILE_HORIZON_THREE_WAY_SPLIT: '#ec4899',
+    }
+    return mapping[label]
+
+
+def profile_horizon_stability_short_label(label: str) -> str:
+    mapping = {
+        PROFILE_HORIZON_STABLE: '3x',
+        PROFILE_HORIZON_SINGLE_FLIP: '2+1',
+        PROFILE_HORIZON_THREE_WAY_SPLIT: '3-way',
+    }
+    return mapping[label]
 
 
 def base_svg(width: int, height: int, title: str, subtitle: str) -> list[str]:
@@ -810,6 +828,172 @@ def render_initialization_sensitivity(study: InitializationSensitivityStudy, fee
         'Read the heatmaps first, then the spotlight rows.',
         'The top cells tell you where profile swaps matter most; the thumbnails show what those swings actually look like in the final V field instead of leaving the note at one scalar drift score.',
     ], 'small', line_height=22.0))
+    parts.append('</svg>')
+    return '\n'.join(parts) + '\n'
+
+
+def render_profile_horizon_tags(study: ProfileHorizonTagStudy, feeds: tuple[float, ...], kills: tuple[float, ...]) -> str:
+    width, height = 1560, 2340
+    parts = base_svg(
+        width,
+        height,
+        'Gray-Scott seed-profile horizon tags',
+        f'The three-horizon tag rule repeated under {", ".join(seed_profile_label(profile) for profile in study.profiles)} instead of one fixed seeded patch.',
+    )
+
+    cell = 60
+    panel_w = cell * len(feeds) + 126
+    panel_h = cell * len(kills) + 156
+    map_positions = [(60, 150), (566, 150), (1072, 150)]
+    lookup = {(row.feed, row.kill): row for row in study.rows}
+    late_spans = [row.late_active_fraction_span for row in study.rows]
+    span_vmin = min(late_spans) if late_spans else 0.0
+    span_vmax = max(late_spans) if late_spans else 1.0
+    stability_counts = Counter(row.stability_class for row in study.rows)
+    profile_counts = {
+        profile: Counter(lookup[(feed, kill)].row_for(profile).tag for kill in kills for feed in feeds)
+        for profile in study.profiles
+    }
+
+    def draw_profile_map(profile: str, left: float, top: float) -> None:
+        counts = profile_counts[profile]
+        parts.append(f'<rect x="{left}" y="{top}" width="{panel_w}" height="{panel_h}" class="panel"/>')
+        parts.append(svg_text(left + 22, top + 32, seed_profile_label(profile), 'label'))
+        parts.append(svg_paragraph(left + 22, top + 56, [
+            'Same chemistry grid, same three horizons.',
+            'Only the seed geometry changes here.',
+        ], 'small', line_height=18.0))
+        grid_left = left + 22
+        grid_top = top + 108
+        for column, feed in enumerate(feeds):
+            x = grid_left + column * cell
+            parts.append(svg_text(x + cell / 2, grid_top - 18, f'{feed:.3f}', 'small', 'middle'))
+        parts.append(svg_text(grid_left + cell * len(feeds) / 2, grid_top - 42, 'feed rate F', 'small', 'middle'))
+        for row_index, kill in enumerate(kills):
+            y = grid_top + row_index * cell
+            parts.append(svg_text(grid_left - 16, y + cell / 2 + 5, f'{kill:.3f}', 'small', 'end'))
+            for column, feed in enumerate(feeds):
+                x = grid_left + column * cell
+                entry = lookup[(feed, kill)].row_for(profile)
+                parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{cell - 6}" height="{cell - 6}" fill="{horizon_tag_color(entry.tag)}" rx="10"/>')
+                parts.append(f'<text x="{x + (cell - 6) / 2:.1f}" y="{y + cell / 2 - 5:.1f}" class="cell-label" text-anchor="middle" fill="#f8fafc">{horizon_tag_short_label(entry.tag)}</text>')
+                parts.append(svg_text(x + (cell - 6) / 2, y + cell / 2 + 15, f'{entry.total_active_delta:+.2f}', 'small', 'middle'))
+        legend_y = top + panel_h - 34
+        legend_items = [
+            (HORIZON_TAG_SETTLED, f'{counts.get(HORIZON_TAG_SETTLED, 0)} set'),
+            (HORIZON_TAG_GROWING, f'{counts.get(HORIZON_TAG_GROWING, 0)} up'),
+            (HORIZON_TAG_FADING, f'{counts.get(HORIZON_TAG_FADING, 0)} down'),
+            (HORIZON_TAG_REVERSING, f'{counts.get(HORIZON_TAG_REVERSING, 0)} flip'),
+        ]
+        for index, (tag, text) in enumerate(legend_items):
+            x = left + 20 + index * 92
+            parts.append(f'<rect x="{x:.1f}" y="{legend_y - 13:.1f}" width="16" height="16" fill="{horizon_tag_color(tag)}" rx="4"/>')
+            parts.append(svg_text(x + 22, legend_y, text, 'small'))
+
+    for profile, (left, top) in zip(study.profiles, map_positions):
+        draw_profile_map(profile, left, top)
+
+    center_reversing = sum(1 for row in study.rows if row.row_for('center').tag == HORIZON_TAG_REVERSING) if 'center' in study.profiles else 0
+    survived_reversing = sum(1 for row in study.rows if len(row.reversing_profiles) >= 2)
+    parts.append(svg_paragraph(60, 652, [
+        f'{stability_counts.get(PROFILE_HORIZON_STABLE, 0)} cells keep one shared tag, {stability_counts.get(PROFILE_HORIZON_SINGLE_FLIP, 0)} have a two-against-one flip, and {stability_counts.get(PROFILE_HORIZON_THREE_WAY_SPLIT, 0)} split three ways.',
+        f'The earlier center-profile reversing lane does not stay chemistry-only: {center_reversing} center reversing cells exist here, but only {survived_reversing} cells keep a reversing tag in two or more profiles.',
+    ], 'small', line_height=22.0))
+    parts.append(svg_paragraph(60, 718, [
+        'Read the three maps left to right first. Then use the agreement and late-span cards below to see whether the tag change is a minor relabel or a real late-horizon fate shift.',
+    ], 'small', line_height=22.0))
+
+    summary_top = 800
+    summary_panel_w = 670
+    summary_panel_h = 392
+    summary_cell = 50
+
+    parts.append(f'<rect x="60" y="{summary_top}" width="{summary_panel_w}" height="{summary_panel_h}" class="panel"/>')
+    parts.append(svg_text(84, summary_top + 32, 'profile agreement map', 'label'))
+    parts.append(svg_paragraph(84, summary_top + 56, [
+        '3x means all profiles agree. 2+1 means one profile flips. 3-way means every profile lands on a different tag.',
+    ], 'small', line_height=18.0))
+    grid_left = 84
+    grid_top = summary_top + 108
+    for column, feed in enumerate(feeds):
+        x = grid_left + column * summary_cell
+        parts.append(svg_text(x + summary_cell / 2, grid_top - 18, f'{feed:.3f}', 'small', 'middle'))
+    parts.append(svg_text(grid_left + summary_cell * len(feeds) / 2, grid_top - 42, 'feed rate F', 'small', 'middle'))
+    for row_index, kill in enumerate(kills):
+        y = grid_top + row_index * summary_cell
+        parts.append(svg_text(grid_left - 16, y + summary_cell / 2 + 5, f'{kill:.3f}', 'small', 'end'))
+        for column, feed in enumerate(feeds):
+            x = grid_left + column * summary_cell
+            entry = lookup[(feed, kill)]
+            label = entry.stability_class
+            parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{summary_cell - 6}" height="{summary_cell - 6}" fill="{profile_horizon_stability_color(label)}" rx="10"/>')
+            parts.append(f'<text x="{x + (summary_cell - 6) / 2:.1f}" y="{y + summary_cell / 2 + 3:.1f}" class="cell-label" text-anchor="middle" fill="#f8fafc">{profile_horizon_stability_short_label(label)}</text>')
+    legend_y = summary_top + summary_panel_h - 28
+    legend_items = [
+        (PROFILE_HORIZON_STABLE, 'all agree'),
+        (PROFILE_HORIZON_SINGLE_FLIP, 'one flips'),
+        (PROFILE_HORIZON_THREE_WAY_SPLIT, 'three-way'),
+    ]
+    for index, (label, text) in enumerate(legend_items):
+        x = 84 + index * 150
+        parts.append(f'<rect x="{x:.1f}" y="{legend_y - 13:.1f}" width="18" height="18" fill="{profile_horizon_stability_color(label)}" rx="4"/>')
+        parts.append(svg_text(x + 24, legend_y, text, 'small'))
+
+    right_left = 830
+    parts.append(f'<rect x="{right_left}" y="{summary_top}" width="{summary_panel_w}" height="{summary_panel_h}" class="panel"/>')
+    parts.append(svg_text(right_left + 24, summary_top + 32, f'late active span at {study.late_steps} steps', 'label'))
+    parts.append(svg_paragraph(right_left + 24, summary_top + 56, [
+        'This is max(final active fraction) - min(final active fraction) across the seed profiles.',
+    ], 'small', line_height=18.0))
+    grid_left = right_left + 24
+    grid_top = summary_top + 108
+    for column, feed in enumerate(feeds):
+        x = grid_left + column * summary_cell
+        parts.append(svg_text(x + summary_cell / 2, grid_top - 18, f'{feed:.3f}', 'small', 'middle'))
+    parts.append(svg_text(grid_left + summary_cell * len(feeds) / 2, grid_top - 42, 'feed rate F', 'small', 'middle'))
+    for row_index, kill in enumerate(kills):
+        y = grid_top + row_index * summary_cell
+        parts.append(svg_text(grid_left - 16, y + summary_cell / 2 + 5, f'{kill:.3f}', 'small', 'end'))
+        for column, feed in enumerate(feeds):
+            x = grid_left + column * summary_cell
+            entry = lookup[(feed, kill)]
+            value = entry.late_active_fraction_span
+            parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{summary_cell - 6}" height="{summary_cell - 6}" fill="{metric_color(value, span_vmin, span_vmax)}" rx="10"/>')
+            parts.append(f'<text x="{x + (summary_cell - 6) / 2:.1f}" y="{y + summary_cell / 2 + 3:.1f}" class="cell-label" text-anchor="middle" fill="{metric_label_color(value, span_vmin, span_vmax)}">{value:.2f}</text>')
+    largest_span = max(study.rows, key=lambda row: row.late_active_fraction_span)
+    parts.append(svg_paragraph(right_left + 24, summary_top + summary_panel_h - 34, [
+        f'Largest final span: F={largest_span.feed:.3f}, k={largest_span.kill:.3f}, span={largest_span.late_active_fraction_span:.3f}.',
+    ], 'small', line_height=18.0))
+
+    spotlight_top = 1220
+    spotlight_panel_h = 300
+    spotlight_gap = 28
+    thumb_pixel = 2.9
+    thumb_size = study.size * thumb_pixel
+    profile_panel_w = 432
+    for index, spotlight in enumerate(study.spotlights):
+        top = spotlight_top + index * (spotlight_panel_h + spotlight_gap)
+        parts.append(f'<rect x="60" y="{top}" width="1440" height="{spotlight_panel_h}" class="panel"/>')
+        parts.append(svg_text(84, top + 32, spotlight.title, 'label'))
+        parts.append(svg_paragraph(84, top + 56, [spotlight.reason], 'small', line_height=18.0))
+        for profile_index, profile_entry in enumerate(spotlight.profiles):
+            left = 84 + profile_index * profile_panel_w
+            parts.append(f'<rect x="{left}" y="{top + 90}" width="400" height="182" fill="#111c30" stroke="#334155" stroke-width="1.5" rx="14"/>')
+            parts.append(svg_text(left + 16, top + 116, seed_profile_label(profile_entry.profile), 'label'))
+            parts.append(svg_text(left + 16, top + 140, f'{horizon_tag_long_label(profile_entry.row.tag)} | Δtotal={profile_entry.row.total_active_delta:+.3f}', 'small'))
+            _draw_state_thumbnail(parts, state=profile_entry.state, left=left + 16, top=top + 158, pixel=thumb_pixel)
+            text_left = left + 16 + thumb_size + 20
+            parts.append(svg_paragraph(text_left, top + 176, [
+                f'late active: {profile_entry.row.late_metrics.active_fraction:.3f}',
+                f'leg 1: {profile_entry.row.early_active_delta:+.3f}',
+                f'leg 2: {profile_entry.row.late_active_delta:+.3f}',
+                f'edge late: {profile_entry.row.late_metrics.edge_density:.4f}',
+            ], 'small', line_height=18.0))
+
+    parts.append(svg_paragraph(60, 2288, [
+        'This is still one lattice, one seed value, and one bounded three-horizon tag rule.',
+        'That is enough to show that some late-horizon cautions belong to the seed geometry as much as to the chemistry cell itself.',
+    ], 'small', line_height=20.0))
     parts.append('</svg>')
     return '\n'.join(parts) + '\n'
 

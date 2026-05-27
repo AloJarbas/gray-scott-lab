@@ -10,12 +10,15 @@ from .analysis import (
     ParameterScanRow,
     PatternMetrics,
     PresetStudy,
+    ProfileHorizonTagRow,
+    ProfileHorizonTagStudy,
     measure_pattern,
     scan_parameter_grid,
     scaled_patch_radius,
     study_grid_size_comparison,
     study_initialization_sensitivity,
     study_presets,
+    study_profile_horizon_tags,
 )
 from .core import GrayScottParameters, GrayScottPreset, GrayScottState, seed_profile_label, seed_state, simulate, simulate_preset, step
 
@@ -32,6 +35,8 @@ __all__ = [
     'PatternMetrics',
     'PresetStudy',
     'ParameterScanRow',
+    'ProfileHorizonTagRow',
+    'ProfileHorizonTagStudy',
     'SCAN_FEEDS',
     'SCAN_KILLS',
     'measure_pattern',
@@ -45,4 +50,5 @@ __all__ = [
     'study_grid_size_comparison',
     'study_initialization_sensitivity',
     'study_presets',
+    'study_profile_horizon_tags',
 ]
